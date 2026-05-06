@@ -7,8 +7,7 @@ import { fetchBugs, printBugLine } from "./bugzilla.mjs";
 /** @typedef {import("./types.d.ts").ComponentConfig} ComponentConfig */
 /** @typedef {import("./types.d.ts").BugCommentResponse} BugCommentResponse */
 
-const DESCRIPTION_LINES = 5;
-const LINE_CAP = 100;
+const DESCRIPTION_LINES = 10;
 
 /** @type {Array<{label: string, value: string}>} */
 const PRIORITY_OPTIONS = [
@@ -96,11 +95,12 @@ async function triageBug(bug, url, apiKey, dryRun) {
 
   const description = await fetchBugDescription(bug.id, url, apiKey);
   if (description) {
-    console.log(`  ${color.blackBright("─".repeat(50))}`);
+    const wrapWidth = (process.stdout.columns || 80) - 2;
     const lines = description
       .split("\n")
-      .slice(0, DESCRIPTION_LINES)
-      .map((l) => (l.length > LINE_CAP ? l.slice(0, LINE_CAP - 1) + "…" : l));
+      .flatMap((l) => (l.length === 0 ? [""] : wordWrap(l, wrapWidth)))
+      .slice(0, DESCRIPTION_LINES);
+    console.log(`  ${color.blackBright("─".repeat(Math.min(wrapWidth, 60)))}`);
     for (const line of lines) {
       console.log(`  ${line}`);
     }
@@ -135,6 +135,29 @@ async function triageBug(bug, url, apiKey, dryRun) {
   }
 
   console.log("");
+}
+
+/**
+ * @param {string} text
+ * @param {number} width
+ * @returns {string[]}
+ */
+function wordWrap(text, width) {
+  const words = text.split(" ");
+  const lines = [];
+  let current = "";
+  for (const word of words) {
+    if (current.length === 0) {
+      current = word;
+    } else if (current.length + 1 + word.length <= width) {
+      current += " " + word;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [""];
 }
 
 /**
