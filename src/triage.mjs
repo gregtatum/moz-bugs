@@ -17,12 +17,17 @@ const SEVERITY_MAP = /** @type {Record<string, string>} */ ({ "1": "S1", "2": "S
 /**
  * @param {ComponentConfig[]} components
  * @param {(url: string) => BugzillaAuth | null} getAuth
+ * @param {{ dryRun?: boolean }} [options]
  */
-export async function runTriage(components, getAuth) {
+export async function runTriage(components, getAuth, options = {}) {
+  const dryRun = options.dryRun ?? false;
+  if (dryRun) {
+    console.log(color.yellow("Dry run — no changes will be written to Bugzilla.\n"));
+  }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     for (const config of components) {
-      await triageComponent(config, getAuth(config.url), rl);
+      await triageComponent(config, getAuth(config.url), rl, dryRun);
     }
   } finally {
     rl.close();
@@ -33,11 +38,12 @@ export async function runTriage(components, getAuth) {
  * @param {ComponentConfig} config
  * @param {BugzillaAuth | null} auth
  * @param {import("node:readline/promises").Interface} rl
+ * @param {boolean} dryRun
  */
-async function triageComponent(config, auth, rl) {
+async function triageComponent(config, auth, rl, dryRun) {
   const { product, component, url } = config;
 
-  if (!auth?.apiKey) {
+  if (!dryRun && !auth?.apiKey) {
     console.warn(color.yellow(`\nNo API key for ${url} — updates will be skipped.`));
   }
 
@@ -63,7 +69,7 @@ async function triageComponent(config, auth, rl) {
   console.log("");
 
   for (const bug of toTriage) {
-    await triageBug(bug, url, auth?.apiKey ?? null, rl);
+    await triageBug(bug, url, auth?.apiKey ?? null, rl, dryRun);
   }
 }
 
@@ -72,8 +78,9 @@ async function triageComponent(config, auth, rl) {
  * @param {string} url
  * @param {string | null} apiKey
  * @param {import("node:readline/promises").Interface} rl
+ * @param {boolean} dryRun
  */
-async function triageBug(bug, url, apiKey, rl) {
+async function triageBug(bug, url, apiKey, rl, dryRun) {
   printBugLine(bug, url, "");
 
   const date = bug.creation_time ? bug.creation_time.slice(0, 10) : "unknown";
@@ -116,7 +123,10 @@ async function triageBug(bug, url, apiKey, rl) {
   }
 
   if (newPriority || newSeverity) {
-    if (!apiKey) {
+    const parts = [newPriority, newSeverity].filter(Boolean);
+    if (dryRun) {
+      console.log(color.blackBright(`  (dry run) Would set: ${parts.join(", ")}`));
+    } else if (!apiKey) {
       console.log(color.blackBright("  (skipped — no API key)"));
     } else {
       /** @type {Record<string, string>} */
@@ -124,7 +134,6 @@ async function triageBug(bug, url, apiKey, rl) {
       if (newPriority) updates.priority = newPriority;
       if (newSeverity) updates.severity = newSeverity;
       await updateBug(bug.id, url, apiKey, updates);
-      const parts = [newPriority, newSeverity].filter(Boolean);
       console.log(color.green(`  Updated: ${parts.join(", ")}`));
     }
   }

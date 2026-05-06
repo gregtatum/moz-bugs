@@ -22,16 +22,23 @@ export async function main(argv = process.argv) {
         await runAll();
         break;
       }
+      case "--help":
+      case "-h": {
+        printHelp();
+        break;
+      }
       case "component": {
+        if (args.includes("--help") || args.includes("-h")) {
+          printComponentHelp();
+          break;
+        }
         const { isDelete, args: filteredArgs } = parseDeleteArgs(args);
         const [product, component, maybeUrl] = filteredArgs;
         const url = maybeUrl || DEFAULT_BUGZILLA_URL;
 
         if (!product || !component) {
-          throw new Error(
-            'Usage: bugzilla-jira component <product> <component> [url]\n' +
-            'Example: bugzilla-jira component Core "Machine Learning: On Device"'
-          );
+          printComponentHelp();
+          process.exit(1);
         }
 
         if (isDelete) {
@@ -53,6 +60,11 @@ export async function main(argv = process.argv) {
         break;
       }
       case "triage": {
+        if (args.includes("--help") || args.includes("-h")) {
+          printTriageHelp();
+          break;
+        }
+        const dryRun = args.includes("--dryrun");
         const components = getComponentConfigs();
         if (components.length === 0) {
           console.log("No components saved.");
@@ -63,7 +75,7 @@ export async function main(argv = process.argv) {
           console.error("triage requires an interactive terminal.");
           process.exit(1);
         }
-        await runTriage(components, getBugzillaAuth);
+        await runTriage(components, getBugzillaAuth, { dryRun });
         break;
       }
       default:
@@ -139,6 +151,58 @@ function parseDeleteArgs(args) {
     filtered.push(arg);
   }
   return { isDelete, args: filtered };
+}
+
+function printHelp() {
+  console.log(`
+Usage: bugzilla-jira [command] [options]
+
+Commands:
+  (no command)    List open bugs for all saved components
+  component       Save or remove a Bugzilla product/component to track
+  triage          Interactively assign priority/severity to un-triaged bugs
+
+Options:
+  -h, --help      Show help
+
+Run "bugzilla-jira <command> --help" for details on a specific command.
+`.trim());
+}
+
+function printComponentHelp() {
+  console.log(`
+Usage: bugzilla-jira component <product> <component> [url]
+       bugzilla-jira component <product> <component> [url] -d
+
+Save or remove a Bugzilla product/component pair to track.
+
+Arguments:
+  product         Bugzilla product name        (e.g. Core)
+  component       Bugzilla component name      (e.g. "Machine Learning: On Device")
+  url             Bugzilla instance URL        (default: https://bugzilla.mozilla.org)
+
+Options:
+  -d, --delete    Remove the component instead of adding it
+  -h, --help      Show this help
+`.trim());
+}
+
+function printTriageHelp() {
+  console.log(`
+Usage: bugzilla-jira triage
+
+Walk through open bugs across all saved components and assign priority
+and severity to any that are missing them.
+
+  Priority is prompted when the bug has no priority set (--).
+  Severity is prompted for defects with no severity set (--).
+  Bugs that are already fully triaged are skipped silently.
+  Requires an API key to write updates back to Bugzilla.
+
+Options:
+  --dryrun        Prompt as normal but do not write any changes to Bugzilla
+  -h, --help      Show this help
+`.trim());
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
