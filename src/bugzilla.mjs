@@ -32,15 +32,13 @@ export async function runComponentBugs(product, component, url, apiKey) {
   }
 
   const sorted = [...bugs].sort((a, b) => a.summary.localeCompare(b.summary));
-
   // Batch-fetch children of all meta bugs in one request
-  const childIds = [
-    ...new Set(
-      sorted
-        .filter((bug) => bug.summary.toLowerCase().includes("[meta]"))
-        .flatMap((bug) => bug.depends_on ?? [])
-    ),
-  ];
+  const childIdSet = new Set(
+    sorted
+      .filter((bug) => bug.summary.toLowerCase().includes("[meta]"))
+      .flatMap((bug) => bug.depends_on ?? [])
+  );
+  const childIds = [...childIdSet];
 
   /** @type {Map<number, Bug>} */
   const childMap = new Map();
@@ -57,7 +55,7 @@ export async function runComponentBugs(product, component, url, apiKey) {
     }
   }
 
-  for (const bug of sorted) {
+  for (const bug of sorted.filter((bug) => !childIdSet.has(bug.id))) {
     printBugLine(bug, url, "");
 
     if (bug.summary.toLowerCase().includes("[meta]") && bug.depends_on?.length) {
