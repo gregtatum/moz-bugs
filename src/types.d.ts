@@ -21,6 +21,7 @@ export type Bug = {
   assigned_to: string;
   priority: string;
   type: string;
+  depends_on: number[];
 };
 
 export type BugSearchResponse = {
