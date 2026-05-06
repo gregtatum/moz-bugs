@@ -23,8 +23,19 @@ export type Bug = {
   severity: string;
   type: string;
   depends_on: number[];
+  creator?: string;
+  creation_time?: string;
 };
 
 export type BugSearchResponse = {
   bugs: Bug[];
+};
+
+export type BugComment = {
+  text: string;
+  count: number;
+};
+
+export type BugCommentResponse = {
+  bugs: Record<string, { comments: BugComment[] }>;
 };

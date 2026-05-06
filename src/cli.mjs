@@ -2,6 +2,7 @@
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "url";
 import { runComponentBugs } from "./bugzilla.mjs";
+import { runTriage } from "./triage.mjs";
 import {
   addComponentConfig,
   removeComponentConfig,
@@ -49,6 +50,20 @@ export async function main(argv = process.argv) {
           }
           await ensureBugzillaAuth(url);
         }
+        break;
+      }
+      case "triage": {
+        const components = getComponentConfigs();
+        if (components.length === 0) {
+          console.log("No components saved.");
+          console.log("Add one with: bugzilla-jira component <product> <component>");
+          break;
+        }
+        if (!process.stdin.isTTY) {
+          console.error("triage requires an interactive terminal.");
+          process.exit(1);
+        }
+        await runTriage(components, getBugzillaAuth);
         break;
       }
       default:

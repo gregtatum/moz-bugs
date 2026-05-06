@@ -76,7 +76,7 @@ export async function runComponentBugs(product, component, url, apiKey) {
  * @param {string | undefined} apiKey
  * @returns {Promise<Bug[]>}
  */
-async function fetchBugs(endpoint, url, apiKey) {
+export async function fetchBugs(endpoint, url, apiKey) {
   /** @type {HeadersInit} */
   const headers = { "Content-Type": "application/json" };
   if (apiKey) {
@@ -133,7 +133,7 @@ function termLink(text, url) {
  * @param {string} url
  * @param {string} treeChar
  */
-function printBugLine(bug, url, treeChar) {
+export function printBugLine(bug, url, treeChar) {
   const bugUrl = `${url}/show_bug.cgi?id=${bug.id}`;
   const link = `\x1b]8;;${bugUrl}\x1b\\${color.green(`Bug ${bug.id}`)}\x1b]8;;\x1b\\`;
   const type = formatType(bug.type);
