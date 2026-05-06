@@ -64,7 +64,9 @@ async function triageComponent(config, auth, dryRun) {
   const bugs = await fetchBugs(new URL(`/rest/bug?${params}`, url), url, auth?.apiKey);
 
   const toTriage = bugs.filter(
-    (b) => b.priority === "--" || (b.type === "defect" && b.severity === "--")
+    (b) =>
+      !b.summary.toLowerCase().includes("[meta]") &&
+      (b.priority === "--" || (b.type === "defect" && b.severity === "--"))
   );
 
   if (toTriage.length === 0) {
