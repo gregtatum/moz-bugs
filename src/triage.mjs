@@ -1,5 +1,4 @@
 // @ts-check
-import { createInterface } from "node:readline/promises";
 import color from "cli-color";
 import { fetchBugs, printBugLine } from "./bugzilla.mjs";
 
@@ -11,8 +10,24 @@ import { fetchBugs, printBugLine } from "./bugzilla.mjs";
 const DESCRIPTION_LINES = 5;
 const LINE_CAP = 100;
 
-const PRIORITY_MAP = /** @type {Record<string, string>} */ ({ "1": "P1", "2": "P2", "3": "P3", "5": "P5" });
-const SEVERITY_MAP = /** @type {Record<string, string>} */ ({ "1": "S1", "2": "S2", "3": "S3" });
+/** @type {Array<{label: string, value: string}>} */
+const PRIORITY_OPTIONS = [
+  { label: "P1", value: "P1" },
+  { label: "P2", value: "P2" },
+  { label: "P3", value: "P3" },
+  { label: "P5", value: "P5" },
+  { label: "skip", value: "" },
+];
+const PRIORITY_DEFAULT = 2; // P3
+
+/** @type {Array<{label: string, value: string}>} */
+const SEVERITY_OPTIONS = [
+  { label: "S1", value: "S1" },
+  { label: "S2", value: "S2" },
+  { label: "S3", value: "S3" },
+  { label: "skip", value: "" },
+];
+const SEVERITY_DEFAULT = 2; // S3
 
 /**
  * @param {ComponentConfig[]} components
@@ -24,23 +39,17 @@ export async function runTriage(components, getAuth, options = {}) {
   if (dryRun) {
     console.log(color.yellow("Dry run — no changes will be written to Bugzilla.\n"));
   }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    for (const config of components) {
-      await triageComponent(config, getAuth(config.url), rl, dryRun);
-    }
-  } finally {
-    rl.close();
+  for (const config of components) {
+    await triageComponent(config, getAuth(config.url), dryRun);
   }
 }
 
 /**
  * @param {ComponentConfig} config
  * @param {BugzillaAuth | null} auth
- * @param {import("node:readline/promises").Interface} rl
  * @param {boolean} dryRun
  */
-async function triageComponent(config, auth, rl, dryRun) {
+async function triageComponent(config, auth, dryRun) {
   const { product, component, url } = config;
 
   if (!dryRun && !auth?.apiKey) {
@@ -69,7 +78,7 @@ async function triageComponent(config, auth, rl, dryRun) {
   console.log("");
 
   for (const bug of toTriage) {
-    await triageBug(bug, url, auth?.apiKey ?? null, rl, dryRun);
+    await triageBug(bug, url, auth?.apiKey ?? null, dryRun);
   }
 }
 
@@ -77,10 +86,9 @@ async function triageComponent(config, auth, rl, dryRun) {
  * @param {Bug} bug
  * @param {string} url
  * @param {string | null} apiKey
- * @param {import("node:readline/promises").Interface} rl
  * @param {boolean} dryRun
  */
-async function triageBug(bug, url, apiKey, rl, dryRun) {
+async function triageBug(bug, url, apiKey, dryRun) {
   printBugLine(bug, url, "");
 
   const date = bug.creation_time ? bug.creation_time.slice(0, 10) : "unknown";
@@ -103,23 +111,11 @@ async function triageBug(bug, url, apiKey, rl, dryRun) {
   let newSeverity = "";
 
   if (bug.priority === "--") {
-    const raw = (await rl.question("  Priority [1=P1 2=P2 3=P3 5=P5 Enter=skip]: ")).trim();
-    if (raw && !PRIORITY_MAP[raw]) {
-      const retry = (await rl.question("  Invalid. Priority [1=P1 2=P2 3=P3 5=P5 Enter=skip]: ")).trim();
-      newPriority = PRIORITY_MAP[retry] ?? "";
-    } else {
-      newPriority = PRIORITY_MAP[raw] ?? "";
-    }
+    newPriority = await selectFromList("Priority:", PRIORITY_OPTIONS, PRIORITY_DEFAULT);
   }
 
   if (bug.type === "defect" && bug.severity === "--") {
-    const raw = (await rl.question("  Severity [1=S1 2=S2 3=S3 Enter=skip]: ")).trim();
-    if (raw && !SEVERITY_MAP[raw]) {
-      const retry = (await rl.question("  Invalid. Severity [1=S1 2=S2 3=S3 Enter=skip]: ")).trim();
-      newSeverity = SEVERITY_MAP[retry] ?? "";
-    } else {
-      newSeverity = SEVERITY_MAP[raw] ?? "";
-    }
+    newSeverity = await selectFromList("Severity:", SEVERITY_OPTIONS, SEVERITY_DEFAULT);
   }
 
   if (newPriority || newSeverity) {
@@ -139,6 +135,64 @@ async function triageBug(bug, url, apiKey, rl, dryRun) {
   }
 
   console.log("");
+}
+
+/**
+ * @param {string} prompt
+ * @param {Array<{label: string, value: string}>} options
+ * @param {number} defaultIndex
+ * @returns {Promise<string>}
+ */
+function selectFromList(prompt, options, defaultIndex) {
+  return new Promise((resolve) => {
+    let selected = defaultIndex;
+    const n = options.length;
+
+    const renderOptions = () => {
+      for (const [i, opt] of options.entries()) {
+        const isSelected = i === selected;
+        const line = isSelected
+          ? `  ${color.cyan(">")} ${opt.label}`
+          : `    ${color.blackBright(opt.label)}`;
+        process.stdout.write(`${line}\n`);
+      }
+    };
+
+    process.stdout.write(`  ${prompt}\n`);
+    renderOptions();
+
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding("utf8");
+
+    /** @param {string} key */
+    const onKey = (key) => {
+      if (key === "\x1b[A" || key === "k") {
+        selected = (selected - 1 + n) % n;
+        process.stdout.write(`\x1b[${n}A`);
+        renderOptions();
+      } else if (key === "\x1b[B" || key === "j") {
+        selected = (selected + 1) % n;
+        process.stdout.write(`\x1b[${n}A`);
+        renderOptions();
+      } else if (key === "\r" || key === "\n") {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.off("data", onKey);
+        // Collapse prompt + option lines to a single result line
+        const result = options[selected].label;
+        process.stdout.write(
+          `\x1b[${n + 1}A\r\x1b[2K  ${prompt} ${color.cyan(result)}\n\x1b[J`
+        );
+        resolve(options[selected].value);
+      } else if (key === "\x03") {
+        process.stdin.setRawMode(false);
+        process.exit(0);
+      }
+    };
+
+    process.stdin.on("data", onKey);
+  });
 }
 
 /**
