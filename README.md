@@ -23,3 +23,7 @@ a heirarchy and is the Bugzilla way to organize epics of work.
 This tool is going to be a collection of utilities to automate some of the process for
 adding whiteboard tags, tracking metabugs, and tracking work so that it all is reflected
 in Jira correctly.
+
+## Development
+
+- `npm run ts` runs TypeScript against the JSDoc annotations.

@@ -1,0 +1,21 @@
+{
+  "name": "bugzilla-jira-cli",
+  "version": "0.1.0",
+  "description": "CLI utilities for managing team work across Bugzilla and Jira.",
+  "type": "module",
+  "main": "src/index.mjs",
+  "bin": {
+    "bugzilla-jira": "./bin/bugzilla-jira.mjs"
+  },
+  "scripts": {
+    "ts": "tsc"
+  },
+  "files": [
+    "src",
+    "bin"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}
