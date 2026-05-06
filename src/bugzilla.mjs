@@ -15,16 +15,13 @@ export async function runComponentBugs(product, component, url, apiKey) {
     product,
     component,
     resolution: "---",
-    include_fields: "id,summary,status,assigned_to,priority,type,depends_on",
+    include_fields: "id,summary,status,assigned_to,priority,severity,type,depends_on",
   });
 
   const endpoint = new URL(`/rest/bug?${params}`, url);
   const bugs = await fetchBugs(endpoint, url, apiKey);
 
-  const divider = "=".repeat(60);
-  console.log(
-    color.cyan(`\n======= ${product} :: ${component} ${divider.slice(product.length + component.length + 7)}`)
-  );
+  printHeader(product, component, url, bugs.length);
 
   if (bugs.length === 0) {
     console.log(color.blackBright("  (no open bugs)"));
@@ -44,7 +41,7 @@ export async function runComponentBugs(product, component, url, apiKey) {
   const childMap = new Map();
   if (childIds.length > 0) {
     const childParams = new URLSearchParams({
-      include_fields: "id,summary,type,priority,assigned_to",
+      include_fields: "id,summary,type,priority,severity,assigned_to",
       resolution: "---",
     });
     for (const id of childIds) {
@@ -101,6 +98,37 @@ async function fetchBugs(endpoint, url, apiKey) {
 }
 
 /**
+ * @param {string} product
+ * @param {string} component
+ * @param {string} url
+ * @param {number} bugCount
+ */
+function printHeader(product, component, url, bugCount) {
+  const p = encodeURIComponent(product);
+  const c = encodeURIComponent(component);
+  const openUrl  = `${url}/buglist.cgi?product=${p}&component=${c}&bug_status=__open__`;
+  const fixedUrl = `${url}/buglist.cgi?product=${p}&component=${c}&chfield=resolution&chfieldfrom=-6m&chfieldvalue=FIXED&bug_status=__closed__`;
+  const fileUrl  = `${url}/enter_bug.cgi?product=${p}&component=${c}`;
+
+  const titleBar = color.bgCyan.black(` ${product} :: ${component}  ·  ${bugCount} open bug${bugCount !== 1 ? "s" : ""} `);
+
+  console.log(`\n  ${titleBar}`);
+  console.log(`  ${color.blackBright("├─")} ${termLink("See Open Bugs",  openUrl)}`);
+  console.log(`  ${color.blackBright("├─")} ${termLink("Recently Fixed", fixedUrl)}`);
+  console.log(`  ${color.blackBright("└─")} ${termLink("File New Bug",   fileUrl)}`);
+  console.log("");
+}
+
+/**
+ * @param {string} text
+ * @param {string} url
+ * @returns {string}
+ */
+function termLink(text, url) {
+  return `\x1b]8;;${url}\x1b\\${color.cyan(text)}\x1b]8;;\x1b\\`;
+}
+
+/**
  * @param {Bug} bug
  * @param {string} url
  * @param {string} treeChar
@@ -110,12 +138,13 @@ function printBugLine(bug, url, treeChar) {
   const link = `\x1b]8;;${bugUrl}\x1b\\${color.green(`Bug ${bug.id}`)}\x1b]8;;\x1b\\`;
   const type = formatType(bug.type);
   const priority = formatPriority(bug.priority);
+  const severity = formatSeverity(bug.severity);
   const tree = treeChar ? `${color.blackBright(treeChar)}` : "";
   const assignee =
     bug.assigned_to && bug.assigned_to !== "nobody@mozilla.org"
       ? ` ${color.blackBright(`(${bug.assigned_to})`)}`
       : "";
-  console.log(`  ${link}  ${type} ${priority} ${tree}${bug.summary}${assignee}`);
+  console.log(`  ${link}  ${type} ${priority} ${severity} ${tree}${bug.summary}${assignee}`);
 }
 
 /** @param {string} type */
@@ -136,6 +165,17 @@ function formatPriority(priority) {
     case "P3": return color.yellowBright("P3");
     case "P4": return color.blackBright("P4");
     case "P5": return color.blackBright("P5");
+    default:   return color.blackBright("--");
+  }
+}
+
+/** @param {string} severity */
+function formatSeverity(severity) {
+  switch (severity) {
+    case "S1": return color.yellow("S1");
+    case "S2": return color.yellow("S2");
+    case "S3": return color.yellowBright("S3");
+    case "S4": return color.blackBright("S4");
     default:   return color.blackBright("--");
   }
 }

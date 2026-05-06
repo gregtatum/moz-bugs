@@ -20,6 +20,7 @@ export type Bug = {
   status: string;
   assigned_to: string;
   priority: string;
+  severity: string;
   type: string;
   depends_on: number[];
 };
