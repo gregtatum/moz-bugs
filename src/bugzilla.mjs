@@ -160,10 +160,10 @@ function formatType(type) {
 /** @param {string} priority */
 function formatPriority(priority) {
   switch (priority) {
-    case "P1": return color.yellow("P1");
+    case "P1": return color.bgYellow.black("P1");
     case "P2": return color.yellow("P2");
-    case "P3": return color.yellowBright("P3");
-    case "P4": return color.blackBright("P4");
+    case "P3": return color.xterm(136)("P3");
+    case "P4": return `\x1b]8;;https://firefox-source-docs.mozilla.org/bug-mgmt/guides/priority.html\x1b\\${color.red("P4")}\x1b]8;;\x1b\\`;
     case "P5": return color.blackBright("P5");
     default:   return color.blackBright("--");
   }
@@ -172,9 +172,9 @@ function formatPriority(priority) {
 /** @param {string} severity */
 function formatSeverity(severity) {
   switch (severity) {
-    case "S1": return color.yellow("S1");
+    case "S1": return color.bgYellow.black("S1");
     case "S2": return color.yellow("S2");
-    case "S3": return color.yellowBright("S3");
+    case "S3": return color.xterm(136)("S3");
     case "S4": return color.blackBright("S4");
     default:   return color.blackBright("--");
   }
