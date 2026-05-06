@@ -45,6 +45,7 @@ export async function runComponentBugs(product, component, url, apiKey) {
   if (childIds.length > 0) {
     const childParams = new URLSearchParams({
       include_fields: "id,summary,type,priority,assigned_to",
+      resolution: "---",
     });
     for (const id of childIds) {
       childParams.append("id", String(id));
