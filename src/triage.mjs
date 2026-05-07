@@ -136,7 +136,7 @@ async function triageBug(bug, url, apiKey, dryRun) {
     }
   }
 
-  console.log("");
+  process.stdout.write("\x1b[2J\x1b[H");
 }
 
 /**
