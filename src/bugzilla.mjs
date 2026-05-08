@@ -3,14 +3,42 @@ import color from "cli-color";
 
 /** @typedef {import("./types.d.ts").Bug} Bug */
 /** @typedef {import("./types.d.ts").BugSearchResponse} BugSearchResponse */
+/** @typedef {import("./types.d.ts").BugFilters} BugFilters */
+
+/**
+ * @param {string} query
+ * @param {string} target
+ * @returns {boolean}
+ */
+export function fuzzyMatch(query, target) {
+  const q = query.toLowerCase();
+  const t = target.toLowerCase();
+  let qi = 0;
+  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
+    if (t[ti] === q[qi]) qi++;
+  }
+  return qi === q.length;
+}
+
+/**
+ * @param {Bug} bug
+ * @param {BugFilters} filters
+ */
+function matchesBugFilter(bug, filters) {
+  if (filters.assigned && !fuzzyMatch(filters.assigned, bug.assigned_to)) return false;
+  if (filters.priority && bug.priority !== filters.priority) return false;
+  if (filters.severity && bug.severity !== filters.severity) return false;
+  return true;
+}
 
 /**
  * @param {string} product
  * @param {string} component
  * @param {string} url
  * @param {string | undefined} apiKey
+ * @param {BugFilters} [filters]
  */
-export async function runComponentBugs(product, component, url, apiKey) {
+export async function runComponentBugs(product, component, url, apiKey, filters = {}) {
   const params = new URLSearchParams({
     product,
     component,
@@ -53,19 +81,28 @@ export async function runComponentBugs(product, component, url, apiKey) {
     }
   }
 
-  for (const bug of sorted.filter((bug) => !childIdSet.has(bug.id))) {
-    printBugLine(bug, url, "");
+  const hasFilter = Boolean(filters.assigned || filters.priority || filters.severity);
 
-    if (bug.summary.toLowerCase().includes("[meta]") && bug.depends_on?.length) {
-      const children = bug.depends_on
+  for (const bug of sorted.filter((bug) => !childIdSet.has(bug.id))) {
+    const isMeta = bug.summary.toLowerCase().includes("[meta]");
+
+    if (!isMeta) {
+      if (!matchesBugFilter(bug, filters)) continue;
+      printBugLine(bug, url, "");
+    } else {
+      const children = (bug.depends_on ?? [])
         .flatMap((id) => { const b = childMap.get(id); return b ? [b] : []; })
+        .filter((b) => matchesBugFilter(b, filters))
         .sort((a, b) => a.summary.localeCompare(b.summary));
 
+      if (hasFilter && children.length === 0) continue;
+
+      printBugLine(bug, url, "");
       for (let i = 0; i < children.length; i++) {
         const isLast = i === children.length - 1;
         printBugLine(children[i], url, isLast ? "└─ " : "├─ ");
       }
-      console.log("");
+      if (children.length > 0) console.log("");
     }
   }
 }

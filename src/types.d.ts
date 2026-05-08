@@ -31,6 +31,13 @@ export type BugSearchResponse = {
   bugs: Bug[];
 };
 
+export type BugFilters = {
+  component?: string;
+  assigned?: string;
+  priority?: string;
+  severity?: string;
+};
+
 export type BugComment = {
   text: string;
   count: number;

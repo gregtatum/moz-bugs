@@ -1,7 +1,7 @@
 // @ts-check
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "url";
-import { runComponentBugs } from "./bugzilla.mjs";
+import { runComponentBugs, fuzzyMatch } from "./bugzilla.mjs";
 import { runTriage } from "./triage.mjs";
 import {
   addComponentConfig,
@@ -25,7 +25,11 @@ export async function main(argv = process.argv) {
         break;
       }
       case "list": {
-        await runAll();
+        if (args.includes("--help") || args.includes("-h")) {
+          printListHelp();
+          break;
+        }
+        await runAll(parseListFilters(args));
         break;
       }
       case "component": {
@@ -93,7 +97,10 @@ export async function main(argv = process.argv) {
   }
 }
 
-async function runAll() {
+/**
+ * @param {import("./types.d.ts").BugFilters} [filters]
+ */
+async function runAll(filters = {}) {
   const components = getComponentConfigs();
   if (components.length === 0) {
     console.log("No components saved.");
@@ -101,9 +108,18 @@ async function runAll() {
     return;
   }
 
-  for (const config of components) {
+  const visible = filters.component
+    ? components.filter((c) => fuzzyMatch(filters.component ?? "", `${c.product} ${c.component}`))
+    : components;
+
+  if (visible.length === 0) {
+    console.log(`No saved components match "${filters.component}".`);
+    return;
+  }
+
+  for (const config of visible) {
     const auth = getBugzillaAuth(config.url);
-    await runComponentBugs(config.product, config.component, config.url, auth?.apiKey);
+    await runComponentBugs(config.product, config.component, config.url, auth?.apiKey, filters);
   }
 }
 
@@ -154,6 +170,44 @@ function parseDeleteArgs(args) {
   return { isDelete, args: filtered };
 }
 
+/**
+ * @param {string[]} args
+ * @returns {import("./types.d.ts").BugFilters}
+ */
+function parseListFilters(args) {
+  /** @type {import("./types.d.ts").BugFilters} */
+  const filters = {};
+  for (let i = 0; i < args.length; i++) {
+    const flag = args[i];
+    const val = args[i + 1] && !args[i + 1].startsWith("-") ? args[i + 1] : null;
+    switch (flag) {
+      case "--component": case "-c":
+        if (val) { filters.component = val; i++; }
+        break;
+      case "--assigned": case "-a":
+        if (val) { filters.assigned = val; i++; }
+        break;
+      case "--priority": case "-p":
+        if (val) { filters.priority = normalizePFilter(val); i++; }
+        break;
+      case "--severity": case "-s":
+        if (val) { filters.severity = normalizeSFilter(val); i++; }
+        break;
+    }
+  }
+  return filters;
+}
+
+/** @param {string} v */
+function normalizePFilter(v) {
+  return `P${v.toUpperCase().replace(/^P/, "")}`;
+}
+
+/** @param {string} v */
+function normalizeSFilter(v) {
+  return `S${v.toUpperCase().replace(/^S/, "")}`;
+}
+
 function printHelp() {
   console.log(`
 Usage: bugzilla-jira <command> [options]
@@ -167,6 +221,21 @@ Options:
   -h, --help      Show help
 
 Run "bugzilla-jira <command> --help" for details on a specific command.
+`.trim());
+}
+
+function printListHelp() {
+  console.log(`
+Usage: bugzilla-jira list [options]
+
+List open bugs across all saved components.
+
+Options:
+  -c, --component <query>   Show only components fuzzy-matching <query>
+  -a, --assigned <query>    Show only bugs whose assignee fuzzy-matches <query>
+  -p, --priority <value>    Filter by priority  (e.g. p1, P2, 1)
+  -s, --severity <value>    Filter by severity  (e.g. s2, S3, 3)
+  -h, --help                Show this help
 `.trim());
 }
 
