@@ -9,22 +9,24 @@ import { fetchBugs, printBugLine } from "./bugzilla.mjs";
 
 const DESCRIPTION_LINES = 10;
 
-/** @type {Array<{label: string, value: string}>} */
+/** @type {Array<{label: string, value: string, shortcut?: string}>} */
 const PRIORITY_OPTIONS = [
-  { label: "P1", value: "P1" },
-  { label: "P2", value: "P2" },
-  { label: "P3", value: "P3" },
-  { label: "P5", value: "P5" },
-  { label: "skip", value: "" },
+  { label: "P1 (1)", value: "P1", shortcut: "1" },
+  { label: "P2 (2)", value: "P2", shortcut: "2" },
+  { label: "P3 (3)", value: "P3", shortcut: "3" },
+  { label: "P5 (5)", value: "P5", shortcut: "5" },
+  { label: "refresh (r)", value: "__refresh__", shortcut: "r" },
+  { label: "skip (esc)", value: "" },
 ];
 const PRIORITY_DEFAULT = 2; // P3
 
-/** @type {Array<{label: string, value: string}>} */
+/** @type {Array<{label: string, value: string, shortcut?: string}>} */
 const SEVERITY_OPTIONS = [
-  { label: "S1", value: "S1" },
-  { label: "S2", value: "S2" },
-  { label: "S3", value: "S3" },
-  { label: "skip", value: "" },
+  { label: "S1 (1)", value: "S1", shortcut: "1" },
+  { label: "S2 (2)", value: "S2", shortcut: "2" },
+  { label: "S3 (3)", value: "S3", shortcut: "3" },
+  { label: "refresh (r)", value: "__refresh__", shortcut: "r" },
+  { label: "skip (esc)", value: "" },
 ];
 const SEVERITY_DEFAULT = 2; // S3
 
@@ -63,11 +65,7 @@ async function triageComponent(config, auth, dryRun) {
   });
   const bugs = await fetchBugs(new URL(`/rest/bug?${params}`, url), url, auth?.apiKey);
 
-  const toTriage = bugs.filter(
-    (b) =>
-      !b.summary.toLowerCase().includes("[meta]") &&
-      (b.priority === "--" || (b.type === "defect" && b.severity === "--"))
-  );
+  const toTriage = bugs.filter(needsTriage);
 
   if (toTriage.length === 0) {
     console.log(color.blackBright(`\n${product} :: ${component} — no bugs need triage.`));
@@ -78,65 +76,94 @@ async function triageComponent(config, auth, dryRun) {
   console.log(`\n  ${color.bgCyan.black(` ${product} :: ${component} `)}  ${color.blackBright(`${count} bug${count !== 1 ? "s" : ""} need triage`)}`);
   console.log("");
 
+  process.stdout.write("\x1b[2J\x1b[H");
   for (const bug of toTriage) {
     await triageBug(bug, url, auth?.apiKey ?? null, dryRun);
   }
 }
 
+/** @param {Bug} bug */
+function needsTriage(bug) {
+  return (
+    !bug.summary.toLowerCase().includes("[meta]") &&
+    (bug.priority === "--" || (bug.type === "defect" && bug.severity === "--"))
+  );
+}
+
 /**
- * @param {Bug} bug
+ * @param {Bug} initialBug
  * @param {string} url
  * @param {string | null} apiKey
  * @param {boolean} dryRun
  */
-async function triageBug(bug, url, apiKey, dryRun) {
-  printBugLine(bug, url, "");
+async function triageBug(initialBug, url, apiKey, dryRun) {
+  let bug = initialBug;
 
-  const date = bug.creation_time ? bug.creation_time.slice(0, 10) : "unknown";
-  console.log(`  ${color.blackBright(`Filed by ${bug.creator ?? "unknown"} · ${date}`)}`);
+  while (true) {
+    printBugLine(bug, url, "");
 
-  const description = await fetchBugDescription(bug.id, url, apiKey);
-  if (description) {
-    const wrapWidth = (process.stdout.columns || 80) - 2;
-    const lines = description
-      .split("\n")
-      .flatMap((l) => (l.length === 0 ? [""] : wordWrap(l, wrapWidth)))
-      .slice(0, DESCRIPTION_LINES);
-    console.log(`  ${color.blackBright("─".repeat(Math.min(wrapWidth, 60)))}`);
-    for (const line of lines) {
-      console.log(`  ${line}`);
+    const date = bug.creation_time ? bug.creation_time.slice(0, 10) : "unknown";
+    console.log(`  ${color.blackBright(`Filed by ${bug.creator ?? "unknown"} · ${date}`)}`);
+
+    const description = await fetchBugDescription(bug.id, url, apiKey);
+    if (description) {
+      const wrapWidth = (process.stdout.columns || 80) - 2;
+      const lines = description
+        .split("\n")
+        .flatMap((l) => (l.length === 0 ? [""] : wordWrap(l, wrapWidth)))
+        .slice(0, DESCRIPTION_LINES);
+      console.log(`  ${color.blackBright("─".repeat(Math.min(wrapWidth, 60)))}`);
+      for (const line of lines) {
+        console.log(`  ${line}`);
+      }
     }
-  }
-  console.log("");
+    console.log("");
 
-  let newPriority = "";
-  let newSeverity = "";
+    let newPriority = "";
+    let newSeverity = "";
+    let shouldRefresh = false;
 
-  if (bug.priority === "--") {
-    newPriority = await selectFromList("Priority:", PRIORITY_OPTIONS, PRIORITY_DEFAULT);
-  }
-
-  if (bug.type === "defect" && bug.severity === "--") {
-    newSeverity = await selectFromList("Severity:", SEVERITY_OPTIONS, SEVERITY_DEFAULT);
-  }
-
-  if (newPriority || newSeverity) {
-    const parts = [newPriority, newSeverity].filter(Boolean);
-    if (dryRun) {
-      console.log(color.blackBright(`  (dry run) Would set: ${parts.join(", ")}`));
-    } else if (!apiKey) {
-      console.log(color.blackBright("  (skipped — no API key)"));
-    } else {
-      /** @type {Record<string, string>} */
-      const updates = {};
-      if (newPriority) updates.priority = newPriority;
-      if (newSeverity) updates.severity = newSeverity;
-      await updateBug(bug.id, url, apiKey, updates);
-      console.log(color.green(`  Updated: ${parts.join(", ")}`));
+    if (bug.priority === "--") {
+      const pick = await selectFromList("Priority:", PRIORITY_OPTIONS, PRIORITY_DEFAULT);
+      if (pick === null) { process.stdout.write("\x1b[2J\x1b[H"); return; }
+      if (pick === "__refresh__") { shouldRefresh = true; }
+      else { newPriority = pick; }
     }
-  }
 
-  process.stdout.write("\x1b[2J\x1b[H");
+    if (!shouldRefresh && bug.type === "defect" && bug.severity === "--") {
+      const pick = await selectFromList("Severity:", SEVERITY_OPTIONS, SEVERITY_DEFAULT);
+      if (pick === null) { process.stdout.write("\x1b[2J\x1b[H"); return; }
+      if (pick === "__refresh__") { shouldRefresh = true; }
+      else { newSeverity = pick; }
+    }
+
+    if (shouldRefresh) {
+      const refreshed = await fetchOneBug(bug.id, url, apiKey);
+      process.stdout.write("\x1b[2J\x1b[H");
+      if (!refreshed || !needsTriage(refreshed)) return;
+      bug = refreshed;
+      continue;
+    }
+
+    if (newPriority || newSeverity) {
+      const parts = [newPriority, newSeverity].filter(Boolean);
+      if (dryRun) {
+        console.log(color.blackBright(`  (dry run) Would set: ${parts.join(", ")}`));
+      } else if (!apiKey) {
+        console.log(color.blackBright("  (skipped — no API key)"));
+      } else {
+        /** @type {Record<string, string>} */
+        const updates = {};
+        if (newPriority) updates.priority = newPriority;
+        if (newSeverity) updates.severity = newSeverity;
+        await updateBug(bug.id, url, apiKey, updates);
+        console.log(color.green(`  Updated: ${parts.join(", ")}`));
+      }
+    }
+
+    process.stdout.write("\x1b[2J\x1b[H");
+    return;
+  }
 }
 
 /**
@@ -164,9 +191,9 @@ function wordWrap(text, width) {
 
 /**
  * @param {string} prompt
- * @param {Array<{label: string, value: string}>} options
+ * @param {Array<{label: string, value: string, shortcut?: string}>} options
  * @param {number} defaultIndex
- * @returns {Promise<string>}
+ * @returns {Promise<string | null>}
  */
 function selectFromList(prompt, options, defaultIndex) {
   return new Promise((resolve) => {
@@ -192,6 +219,16 @@ function selectFromList(prompt, options, defaultIndex) {
 
     /** @param {string} key */
     const onKey = (key) => {
+      const shortcutIdx = options.findIndex((o) => o.shortcut === key);
+      if (shortcutIdx !== -1) {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.off("data", onKey);
+        const opt = options[shortcutIdx];
+        process.stdout.write(`\x1b[${n + 1}A\r\x1b[2K  ${prompt} ${color.cyan(opt.label)}\n\x1b[J`);
+        resolve(opt.value);
+        return;
+      }
       if (key === "\x1b[A" || key === "k") {
         selected = (selected - 1 + n) % n;
         process.stdout.write(`\x1b[${n}A`);
@@ -210,6 +247,12 @@ function selectFromList(prompt, options, defaultIndex) {
           `\x1b[${n + 1}A\r\x1b[2K  ${prompt} ${color.cyan(result)}\n\x1b[J`
         );
         resolve(options[selected].value);
+      } else if (key === "\x1b") {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdin.off("data", onKey);
+        process.stdout.write(`\x1b[${n + 1}A\r\x1b[2K  ${prompt} ${color.blackBright("(skipped)")}\n\x1b[J`);
+        resolve(null);
       } else if (key === "\x03") {
         process.stdin.setRawMode(false);
         process.exit(0);
@@ -218,6 +261,21 @@ function selectFromList(prompt, options, defaultIndex) {
 
     process.stdin.on("data", onKey);
   });
+}
+
+/**
+ * @param {number} bugId
+ * @param {string} url
+ * @param {string | null} apiKey
+ * @returns {Promise<Bug | null>}
+ */
+async function fetchOneBug(bugId, url, apiKey) {
+  const params = new URLSearchParams({
+    include_fields: "id,summary,status,assigned_to,priority,severity,type,depends_on,creator,creation_time",
+  });
+  params.append("id", String(bugId));
+  const bugs = await fetchBugs(new URL(`/rest/bug?${params}`, url), url, apiKey ?? undefined);
+  return bugs[0] ?? null;
 }
 
 /**
