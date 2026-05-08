@@ -2,7 +2,7 @@
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "url";
 import { runComponentBugs, fuzzyMatch } from "./bugzilla.mjs";
-import { closestMatch } from "./utils.mjs";
+import { closestMatch, levenshtein } from "./utils.mjs";
 import { runTriage } from "./triage.mjs";
 import {
   addComponentConfig,
@@ -114,16 +114,41 @@ async function runAll(filters = {}) {
     return;
   }
 
-  const visible = filters.component
-    ? components.filter((c) => fuzzyMatch(filters.component ?? "", `${c.product} ${c.component}`))
-    : components;
+  if (filters.component) {
+    if (filters.component.includes("::")) {
+      // "Product :: Component" — look up directly, bypassing saved components
+      const [product, ...rest] = filters.component.split("::").map((s) => s.trim());
+      const component = rest.join("::").trim();
+      const match = components.find((c) => c.product.toLowerCase() === product.toLowerCase());
+      const url = match?.url ?? DEFAULT_BUGZILLA_URL;
+      const auth = getBugzillaAuth(url);
+      await runComponentBugs(product, component, url, auth?.apiKey, filters);
+      return;
+    }
 
-  if (visible.length === 0) {
-    console.log(`No saved components match "${filters.component}".`);
+    // Fuzzy search against saved components
+    let visible = components.filter((c) =>
+      fuzzyMatch(filters.component ?? "", `${c.product} ${c.component}`)
+    );
+
+    // Levenshtein fallback: pick the closest saved component
+    if (visible.length === 0) {
+      let best = components[0], bestDist = Infinity;
+      for (const c of components) {
+        const d = levenshtein(filters.component, `${c.product} ${c.component}`);
+        if (d < bestDist) { bestDist = d; best = c; }
+      }
+      visible = [best];
+    }
+
+    for (const config of visible) {
+      const auth = getBugzillaAuth(config.url);
+      await runComponentBugs(config.product, config.component, config.url, auth?.apiKey, filters);
+    }
     return;
   }
 
-  for (const config of visible) {
+  for (const config of components) {
     const auth = getBugzillaAuth(config.url);
     await runComponentBugs(config.product, config.component, config.url, auth?.apiKey, filters);
   }
@@ -237,7 +262,9 @@ Usage: bugzilla-jira list [options]
 List open bugs across all saved components.
 
 Options:
-  -c, --component <query>   Show only components fuzzy-matching <query>
+  -c, --component <query>   Fuzzy-match against saved components;
+                            or use "Product :: Component" to look up directly,
+                            e.g. "Core :: Machine Learning: General"
   -a, --assigned <query>    Show only bugs whose assignee fuzzy-matches <query>
   -p, --priority <value>    Filter by priority  (e.g. p1, P2, 1)
   -s, --severity <value>    Filter by severity  (e.g. s2, S3, 3)
