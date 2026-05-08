@@ -18,13 +18,14 @@ export async function main(argv = process.argv) {
 
   try {
     switch (command) {
-      case undefined: {
-        await runAll();
-        break;
-      }
+      case undefined:
       case "--help":
       case "-h": {
         printHelp();
+        break;
+      }
+      case "list": {
+        await runAll();
         break;
       }
       case "component": {
@@ -96,7 +97,7 @@ async function runAll() {
   const components = getComponentConfigs();
   if (components.length === 0) {
     console.log("No components saved.");
-    console.log('Add one with: bugzilla-jira component <product> <component> [url]');
+    console.log("Add one with: bugzilla-jira component <product> <component> [url]");
     return;
   }
 
@@ -155,10 +156,10 @@ function parseDeleteArgs(args) {
 
 function printHelp() {
   console.log(`
-Usage: bugzilla-jira [command] [options]
+Usage: bugzilla-jira <command> [options]
 
 Commands:
-  (no command)    List open bugs for all saved components
+  list            List open bugs for all saved components
   component       Save or remove a Bugzilla product/component to track
   triage          Interactively assign priority/severity to un-triaged bugs
 
