@@ -2,6 +2,7 @@
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "url";
 import { runComponentBugs, fuzzyMatch } from "./bugzilla.mjs";
+import { closestMatch } from "./utils.mjs";
 import { runTriage } from "./triage.mjs";
 import {
   addComponentConfig,
@@ -83,9 +84,14 @@ export async function main(argv = process.argv) {
         await runTriage(components, getBugzillaAuth, { dryRun });
         break;
       }
-      default:
-        console.error(`Unknown command: ${String(command)}`);
+      default: {
+        const suggestion = closestMatch(String(command), ["list", "component", "triage"]);
+        const msg = suggestion
+          ? `Unknown command "${command}", did you mean "${suggestion}"?`
+          : `Unknown command: ${String(command)}`;
+        console.error(msg);
         process.exit(1);
+      }
     }
   } catch (error) {
     if (error instanceof Error) {
