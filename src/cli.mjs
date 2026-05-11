@@ -162,15 +162,16 @@ function resolveComponentQuery(query, savedComponents) {
  */
 async function runAll(filters = {}) {
   const components = getComponentConfigs();
-  if (components.length === 0) {
-    console.log("No components saved.");
-    console.log("Add one with: moz-bugs component <product> <component> [url]");
-    return;
-  }
 
   const visible = filters.component
     ? resolveComponentQuery(filters.component, components)
     : components;
+
+  if (visible.length === 0) {
+    console.log("No components saved.");
+    console.log("Add one with: moz-bugs component <product> <component> [url]");
+    return;
+  }
 
   for (const config of visible) {
     const auth = getBugzillaAuth(config.url);
@@ -185,22 +186,23 @@ async function runFile(args) {
   const componentQuery = parseFlag(args, ["--component", "-c"]);
 
   const savedComponents = getComponentConfigs();
-  if (savedComponents.length === 0) {
-    console.log("No components saved.");
-    console.log("Add one with: moz-bugs component <product> <component>");
-    return;
-  }
 
   let config;
 
   if (componentQuery) {
     const matches = resolveComponentQuery(componentQuery, savedComponents);
     if (matches.length === 0) {
-      console.error(`No component found matching "${componentQuery}".`);
-      process.exit(1);
+      console.log("No components saved.");
+      console.log("Add one with: moz-bugs component <product> <component>");
+      return;
     }
     config = matches[0];
   } else {
+    if (savedComponents.length === 0) {
+      console.log("No components saved.");
+      console.log("Add one with: moz-bugs component <product> <component>");
+      return;
+    }
     if (!process.stdin.isTTY) {
       console.error("file requires --component or an interactive terminal.");
       process.exit(1);
