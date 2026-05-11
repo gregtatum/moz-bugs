@@ -31,6 +31,40 @@ function matchesBugFilter(bug, filters) {
   return true;
 }
 
+/** @type {Record<string,number>} */
+const PRIORITY_ORDER = { P1: 0, P2: 1, P3: 2, P4: 3, P5: 4 };
+/** @type {Record<string,number>} */
+const SEVERITY_ORDER = { S1: 0, S2: 1, S3: 2, S4: 3 };
+
+/**
+ * @param {string[]} fields
+ * @returns {(a: Bug, b: Bug) => number}
+ */
+function makeBugComparator(fields) {
+  return (a, b) => {
+    for (const field of fields) {
+      let cmp = 0;
+      switch (field) {
+        case "id": cmp = a.id - b.id; break;
+        case "creation_time":
+        case "last_change_time":
+          cmp = (a[field] ?? "").localeCompare(b[field] ?? "");
+          break;
+        case "priority":
+          cmp = (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
+          break;
+        case "severity":
+          cmp = (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
+          break;
+        case "assigned_to": cmp = a.assigned_to.localeCompare(b.assigned_to); break;
+        case "summary": cmp = a.summary.localeCompare(b.summary); break;
+      }
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  };
+}
+
 /**
  * @param {string} product
  * @param {string} component
@@ -43,7 +77,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     product,
     component,
     resolution: "---",
-    include_fields: "id,summary,status,assigned_to,priority,severity,type,depends_on",
+    include_fields: "id,summary,status,assigned_to,priority,severity,type,depends_on,creation_time,last_change_time",
   });
 
   const endpoint = new URL(`/rest/bug?${params}`, url);
@@ -56,7 +90,11 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     return;
   }
 
-  const sorted = [...bugs].sort((a, b) => a.summary.localeCompare(b.summary));
+  const sortFields = filters.sort ?? [];
+  const cmp = makeBugComparator(
+    sortFields.includes("summary") ? sortFields : [...sortFields, "summary"]
+  );
+  const sorted = [...bugs].sort(cmp);
   // Batch-fetch children of all meta bugs in one request
   const childIdSet = new Set(
     sorted
@@ -93,7 +131,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
       const children = (bug.depends_on ?? [])
         .flatMap((id) => { const b = childMap.get(id); return b ? [b] : []; })
         .filter((b) => matchesBugFilter(b, filters))
-        .sort((a, b) => a.summary.localeCompare(b.summary));
+        .sort(cmp);
 
       if (hasFilter && children.length === 0) continue;
 

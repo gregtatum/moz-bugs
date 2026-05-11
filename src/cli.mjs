@@ -16,6 +16,10 @@ import {
   DEFAULT_BUGZILLA_URL,
 } from "./store.mjs";
 
+const VALID_PRIORITIES = new Set(["P1", "P2", "P3", "P4", "P5"]);
+const VALID_SEVERITIES = new Set(["S1", "S2", "S3", "S4"]);
+const SORT_FIELDS = ["id", "creation_time", "last_change_time", "priority", "severity", "assigned_to", "summary"];
+
 export async function main(argv = process.argv) {
   const [command, ...args] = argv.slice(2);
 
@@ -372,20 +376,63 @@ function parseListFilters(args) {
     const val = args[i + 1] && !args[i + 1].startsWith("-") ? args[i + 1] : null;
     switch (flag) {
       case "--component": case "-c":
-        if (val) { filters.component = val; i++; }
+        if (val) {
+          filters.component = val;
+          i++;
+        }
         break;
       case "--assigned": case "-a":
-        if (val) { filters.assigned = val; i++; }
+        if (val) {
+          filters.assigned = val;
+          i++;
+        }
         break;
       case "--priority": case "-p":
-        if (val) { filters.priority = normalizePFilter(val); i++; }
+        if (val) {
+          const p = normalizePFilter(val);
+          if (!VALID_PRIORITIES.has(p)) {
+            console.error(`Invalid priority "${val}". Expected P1–P5 (e.g. p1, P2, 3).`);
+            process.exit(1);
+          }
+          filters.priority = p;
+          i++;
+        }
         break;
-      case "--severity": case "-s":
-        if (val) { filters.severity = normalizeSFilter(val); i++; }
+      case "--severity": case "-v":
+        if (val) {
+          const s = normalizeSFilter(val);
+          if (!VALID_SEVERITIES.has(s)) {
+            console.error(`Invalid severity "${val}". Expected S1–S4 (e.g. s1, S2, 3).`);
+            process.exit(1);
+          }
+          filters.severity = s;
+          i++;
+        }
+        break;
+      case "--sort": case "-s":
+        if (val) {
+          filters.sort = val.split(",").map(resolveSortField);
+          i++;
+        }
         break;
     }
   }
   return filters;
+}
+
+/**
+ * @param {string} input
+ * @returns {string}
+ */
+function resolveSortField(input) {
+  const s = input.toLowerCase().trim();
+  let best = SORT_FIELDS[0];
+  let bestDist = Infinity;
+  for (const field of SORT_FIELDS) {
+    const dist = levenshtein(s, field);
+    if (dist < bestDist) { bestDist = dist; best = field; }
+  }
+  return best;
 }
 
 /** @param {string} v */
@@ -440,7 +487,12 @@ Options:
                             e.g. "Core :: Machine Learning: General"
   -a, --assigned <query>    Show only bugs whose assignee fuzzy-matches <query>
   -p, --priority <value>    Filter by priority  (e.g. p1, P2, 1)
-  -s, --severity <value>    Filter by severity  (e.g. s2, S3, 3)
+  -v, --severity <value>    Filter by severity  (e.g. s1, S2, 3)
+  -s, --sort <fields>       Comma-separated sort fields; fuzzy-matched against:
+                            id, creation_time, last_change_time, priority,
+                            severity, assigned_to, summary
+                            Summary is always appended as a final tiebreaker.
+                            (e.g. --sort priority,creation)
   -h, --help                Show this help
 `.trim());
 }

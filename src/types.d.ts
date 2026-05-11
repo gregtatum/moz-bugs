@@ -25,6 +25,7 @@ export type Bug = {
   depends_on: number[];
   creator?: string;
   creation_time?: string;
+  last_change_time?: string;
 };
 
 export type BugSearchResponse = {
@@ -36,6 +37,7 @@ export type BugFilters = {
   assigned?: string;
   priority?: string;
   severity?: string;
+  sort?: string[];
 };
 
 export type BugComment = {
