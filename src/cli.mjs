@@ -84,7 +84,7 @@ export async function main(argv = process.argv) {
         const components = getComponentConfigs();
         if (components.length === 0) {
           console.log("No components saved.");
-          console.log("Add one with: bugzilla-jira component <product> <component>");
+          console.log("Add one with: moz-bugs component <product> <component>");
           break;
         }
         if (!process.stdin.isTTY) {
@@ -164,7 +164,7 @@ async function runAll(filters = {}) {
   const components = getComponentConfigs();
   if (components.length === 0) {
     console.log("No components saved.");
-    console.log("Add one with: bugzilla-jira component <product> <component> [url]");
+    console.log("Add one with: moz-bugs component <product> <component> [url]");
     return;
   }
 
@@ -187,7 +187,7 @@ async function runFile(args) {
   const savedComponents = getComponentConfigs();
   if (savedComponents.length === 0) {
     console.log("No components saved.");
-    console.log("Add one with: bugzilla-jira component <product> <component>");
+    console.log("Add one with: moz-bugs component <product> <component>");
     return;
   }
 
@@ -398,7 +398,7 @@ function normalizeSFilter(v) {
 
 function printHelp() {
   console.log(`
-Usage: bugzilla-jira <command> [options]
+Usage: moz-bugs <command> [options]
 
 Commands:
   list            List open bugs for all saved components
@@ -409,13 +409,13 @@ Commands:
 Options:
   -h, --help      Show help
 
-Run "bugzilla-jira <command> --help" for details on a specific command.
+Run "moz-bugs <command> --help" for details on a specific command.
 `.trim());
 }
 
 function printFileHelp() {
   console.log(`
-Usage: bugzilla-jira file [options]
+Usage: moz-bugs file [options]
 
 Open a browser to file a new bug. If --component is omitted, an interactive
 list of your saved components is shown to pick from.
@@ -428,7 +428,7 @@ Options:
 
 function printListHelp() {
   console.log(`
-Usage: bugzilla-jira list [options]
+Usage: moz-bugs list [options]
 
 List open bugs across all saved components.
 
@@ -445,8 +445,8 @@ Options:
 
 function printComponentHelp() {
   console.log(`
-Usage: bugzilla-jira component <product> <component> [url]
-       bugzilla-jira component <product> <component> [url] -d
+Usage: moz-bugs component <product> <component> [url]
+       moz-bugs component <product> <component> [url] -d
 
 Save or remove a Bugzilla product/component pair to track.
 
@@ -463,7 +463,7 @@ Options:
 
 function printTriageHelp() {
   console.log(`
-Usage: bugzilla-jira triage
+Usage: moz-bugs triage
 
 Walk through open bugs across all saved components and assign priority
 and severity to any that are missing them.

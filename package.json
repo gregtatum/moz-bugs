@@ -1,11 +1,11 @@
 {
-  "name": "bugzilla-jira-cli",
+  "name": "moz-bugs",
   "version": "0.1.0",
   "description": "CLI utilities for managing team work across Bugzilla and Jira.",
   "type": "module",
   "main": "src/index.mjs",
   "bin": {
-    "bugzilla-jira": "./bin/bugzilla-jira.mjs"
+    "moz-bugs": "./bin/moz-bugs.mjs"
   },
   "scripts": {
     "ts": "tsc"

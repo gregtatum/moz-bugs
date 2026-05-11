@@ -10,11 +10,11 @@ import path from "node:path";
 export const DEFAULT_BUGZILLA_URL = "https://bugzilla.mozilla.org";
 
 function resolveStoragePath() {
-  const override = process.env.BUGZILLA_JIRA_STORE_PATH;
+  const override = process.env.MOZ_BUGS_STORE_PATH;
   if (override) {
     return path.resolve(override);
   }
-  return path.join(os.homedir(), ".bugzilla-jira.json");
+  return path.join(os.homedir(), ".moz-bugs.json");
 }
 
 /** @type {Store | null} */

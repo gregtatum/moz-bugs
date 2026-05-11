@@ -1,4 +1,4 @@
-# Bugzilla JIRA CLI
+# moz-bugs
 
 This tool is a CLI tool to help with managing a team's work on Bugzilla and Jira. The
 integration between the two at Mozilla is managed by
