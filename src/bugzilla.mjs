@@ -321,9 +321,10 @@ export function printBugLine(bug, url, treeChar, widths = {}) {
   const { assigneeWidth = 0, daysWidth = 0 } = widths;
   const bugUrl = `${url}/show_bug.cgi?id=${bug.id}`;
   const link = `\x1b]8;;${bugUrl}\x1b\\${color.green(`${bug.id}`)}\x1b]8;;\x1b\\`;
-  const type = formatType(bug.type);
+  const isDefect = bug.type === "defect";
+  const severityBadge = isDefect ? formatSeverityBadge(bug.severity) : null;
+  const badge = severityBadge ?? formatType(bug.type);
   const priority = formatPriority(bug.priority);
-  const severity = formatSeverity(bug.severity);
   const tree = treeChar ? color.blackBright(treeChar) : "";
 
   const assigneeRaw = bug.assigned_to && bug.assigned_to !== NOBODY
@@ -337,7 +338,7 @@ export function printBugLine(bug, url, treeChar, widths = {}) {
 
   const isRestricted = (bug.groups?.length ?? 0) > 0;
   const summary = isRestricted ? color.xterm(203)(bug.summary) : bug.summary;
-  console.log(`${link} ${type} ${priority} ${severity} ${assigneeCol} ${daysCol} ${tree}${summary}`);
+  console.log(`${link} ${badge} ${priority} ${assigneeCol} ${daysCol} ${tree}${summary}`);
 }
 
 /**
@@ -359,6 +360,22 @@ function formatType(type) {
   }
 }
 
+/**
+ * Severity badge for defects — replaces the type badge when severity is set.
+ * Returns null for unset severity so the caller falls back to the " def " badge.
+ * @param {string} severity
+ * @returns {string | null}
+ */
+function formatSeverityBadge(severity) {
+  switch (severity) {
+    case "S1": return color.bgYellow.black(" S1  ");
+    case "S2": return color.bgXterm(167).whiteBright(" S2  ");
+    case "S3": return color.bgXterm(131).whiteBright(" S3  ");
+    case "S4": return color.bgXterm(95).whiteBright(" S4  ");
+    default:   return null;
+  }
+}
+
 /** @param {string} priority */
 function formatPriority(priority) {
   switch (priority) {
@@ -371,13 +388,3 @@ function formatPriority(priority) {
   }
 }
 
-/** @param {string} severity */
-function formatSeverity(severity) {
-  switch (severity) {
-    case "S1": return color.bgYellow.black("S1");
-    case "S2": return color.yellow("S2");
-    case "S3": return color.xterm(136)("S3");
-    case "S4": return color.blackBright("S4");
-    default:   return color.blackBright("--");
-  }
-}
