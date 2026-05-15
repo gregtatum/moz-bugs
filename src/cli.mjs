@@ -18,7 +18,15 @@ import {
 
 const VALID_PRIORITIES = new Set(["P1", "P2", "P3", "P4", "P5"]);
 const VALID_SEVERITIES = new Set(["S1", "S2", "S3", "S4"]);
-const SORT_FIELDS = ["id", "creation_time", "last_change_time", "priority", "severity", "assigned_to", "summary"];
+const SORT_FIELDS = [
+  "id",
+  "creation_time",
+  "last_change_time",
+  "priority",
+  "severity",
+  "assigned_to",
+  "summary",
+];
 
 export async function main(argv = process.argv) {
   const [command, ...args] = argv.slice(2);
@@ -56,16 +64,24 @@ export async function main(argv = process.argv) {
         if (isDelete) {
           const { removed } = removeComponentConfig(product, component, url);
           if (removed) {
-            console.log(`Removed component config for ${product} :: ${component}.`);
+            console.log(
+              `Removed component config for ${product} :: ${component}.`,
+            );
           } else {
-            console.log(`No saved config found for ${product} :: ${component}.`);
+            console.log(
+              `No saved config found for ${product} :: ${component}.`,
+            );
           }
         } else {
           const { added } = addComponentConfig(product, component, url);
           if (added) {
-            console.log(`Saved component config for ${product} :: ${component}.`);
+            console.log(
+              `Saved component config for ${product} :: ${component}.`,
+            );
           } else {
-            console.log(`Component config already saved for ${product} :: ${component}.`);
+            console.log(
+              `Component config already saved for ${product} :: ${component}.`,
+            );
           }
           await ensureBugzillaAuth(url);
         }
@@ -99,7 +115,12 @@ export async function main(argv = process.argv) {
         break;
       }
       default: {
-        const suggestion = closestMatch(String(command), ["list", "component", "triage", "file"]);
+        const suggestion = closestMatch(String(command), [
+          "list",
+          "component",
+          "triage",
+          "file",
+        ]);
         const msg = suggestion
           ? `Unknown command "${command}", did you mean "${suggestion}"?`
           : `Unknown command: ${String(command)}`;
@@ -132,14 +153,14 @@ function resolveComponentQuery(query, savedComponents) {
     const product = query.slice(0, separatorIndex).trim();
     const component = query.slice(separatorIndex + 2).trim();
     const matchingConfig = savedComponents.find(
-      (c) => c.product.toLowerCase() === product.toLowerCase()
+      (c) => c.product.toLowerCase() === product.toLowerCase(),
     );
     const url = matchingConfig?.url ?? DEFAULT_BUGZILLA_URL;
     return [{ product, component, url }];
   }
 
   const fuzzyMatches = savedComponents.filter((c) =>
-    fuzzyMatch(query, `${c.product} ${c.component}`)
+    fuzzyMatch(query, `${c.product} ${c.component}`),
   );
 
   if (fuzzyMatches.length > 0) {
@@ -179,7 +200,13 @@ async function runAll(filters = {}) {
 
   for (const config of visible) {
     const auth = getBugzillaAuth(config.url);
-    await runComponentBugs(config.product, config.component, config.url, auth?.apiKey, filters);
+    await runComponentBugs(
+      config.product,
+      config.component,
+      config.url,
+      auth?.apiKey,
+      filters,
+    );
   }
 }
 
@@ -216,9 +243,10 @@ async function runFile(args) {
     config = selected;
   }
 
-  const fileUrl = `${config.url}/enter_bug.cgi`
-    + `?product=${encodeURIComponent(config.product)}`
-    + `&component=${encodeURIComponent(config.component)}`;
+  const fileUrl =
+    `${config.url}/enter_bug.cgi` +
+    `?product=${encodeURIComponent(config.product)}` +
+    `&component=${encodeURIComponent(config.component)}`;
 
   openBrowserUrl(fileUrl);
 }
@@ -268,7 +296,7 @@ function selectComponentConfig(components) {
         process.stdin.off("data", onKey);
         const selected = components[selectedIndex];
         process.stdout.write(
-          `\x1b[${count + 1}A\r\x1b[2K  ${color.cyan(label(selected))}\n\x1b[J`
+          `\x1b[${count + 1}A\r\x1b[2K  ${color.cyan(label(selected))}\n\x1b[J`,
         );
         resolve(selected);
       } else if (key === "\x1b") {
@@ -276,7 +304,7 @@ function selectComponentConfig(components) {
         process.stdin.pause();
         process.stdin.off("data", onKey);
         process.stdout.write(
-          `\x1b[${count + 1}A\r\x1b[2K  ${color.blackBright("(cancelled)")}\n\x1b[J`
+          `\x1b[${count + 1}A\r\x1b[2K  ${color.blackBright("(cancelled)")}\n\x1b[J`,
         );
         resolve(null);
       } else if (key === "\x03") {
@@ -293,9 +321,12 @@ function selectComponentConfig(components) {
  * @param {string} url
  */
 function openBrowserUrl(url) {
-  const opener = process.platform === "win32" ? "start"
-    : process.platform === "darwin" ? "open"
-    : "xdg-open";
+  const opener =
+    process.platform === "win32"
+      ? "start"
+      : process.platform === "darwin"
+        ? "open"
+        : "xdg-open";
   spawn(opener, [url], { detached: true, stdio: "ignore" }).unref();
   console.log(url);
 }
@@ -328,7 +359,7 @@ async function ensureBugzillaAuth(url) {
 
   if (!process.stdin.isTTY) {
     console.warn(
-      `No Bugzilla API key configured for ${url}. Run the component command in a terminal to set one.`
+      `No Bugzilla API key configured for ${url}. Run the component command in a terminal to set one.`,
     );
     return;
   }
@@ -338,7 +369,9 @@ async function ensureBugzillaAuth(url) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     console.log(`API key URL: ${origin}/userprefs.cgi?tab=apikey`);
-    const token = (await rl.question("Paste Bugzilla API key (or press Enter to skip): ")).trim();
+    const token = (
+      await rl.question("Paste Bugzilla API key (or press Enter to skip): ")
+    ).trim();
     if (token) {
       setBugzillaAuth(url, token);
     }
@@ -373,43 +406,53 @@ function parseListFilters(args) {
   const filters = {};
   for (let i = 0; i < args.length; i++) {
     const flag = args[i];
-    const val = args[i + 1] && !args[i + 1].startsWith("-") ? args[i + 1] : null;
+    const val =
+      args[i + 1] && !args[i + 1].startsWith("-") ? args[i + 1] : null;
     switch (flag) {
-      case "--component": case "-c":
+      case "--component":
+      case "-c":
         if (val) {
           filters.component = val;
           i++;
         }
         break;
-      case "--assigned": case "-a":
+      case "--assigned":
+      case "-a":
         if (val) {
           filters.assigned = val;
           i++;
         }
         break;
-      case "--priority": case "-p":
+      case "--priority":
+      case "-p":
         if (val) {
           const p = normalizePFilter(val);
           if (!VALID_PRIORITIES.has(p)) {
-            console.error(`Invalid priority "${val}". Expected P1–P5 (e.g. p1, P2, 3).`);
+            console.error(
+              `Invalid priority "${val}". Expected P1–P5 (e.g. p1, P2, 3).`,
+            );
             process.exit(1);
           }
           filters.priority = p;
           i++;
         }
         break;
-      case "--severity": case "-v":
+      case "--severity":
+      case "-v":
         if (val) {
           const s = normalizeSFilter(val);
           if (!VALID_SEVERITIES.has(s)) {
-            console.error(`Invalid severity "${val}". Expected S1–S4 (e.g. s1, S2, 3).`);
+            console.error(
+              `Invalid severity "${val}". Expected S1–S4 (e.g. s1, S2, 3).`,
+            );
             process.exit(1);
           }
           filters.severity = s;
           i++;
         }
         break;
-      case "--sort": case "-s":
+      case "--sort":
+      case "-s":
         if (val) {
           filters.sort = val.split(",").map(resolveSortField);
           i++;
@@ -433,7 +476,10 @@ function resolveSortField(input) {
   let bestDist = Infinity;
   for (const field of SORT_FIELDS) {
     const dist = levenshtein(s, field);
-    if (dist < bestDist) { bestDist = dist; best = field; }
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = field;
+    }
   }
   return best;
 }
@@ -448,8 +494,10 @@ function normalizeSFilter(v) {
   return `S${v.toUpperCase().replace(/^S/, "")}`;
 }
 
+// NOTE: Keep in sync with the README.md.
 function printHelp() {
-  console.log(`
+  console.log(
+    `
 Usage: moz-bugs <command> [options]
 
 Commands:
@@ -462,11 +510,14 @@ Options:
   -h, --help      Show help
 
 Run "moz-bugs <command> --help" for details on a specific command.
-`.trim());
+`.trim(),
+  );
 }
 
+// NOTE: Keep in sync with the README.md.
 function printFileHelp() {
-  console.log(`
+  console.log(
+    `
 Usage: moz-bugs file [options]
 
 Open a browser to file a new bug. If --component is omitted, an interactive
@@ -475,11 +526,14 @@ list of your saved components is shown to pick from.
 Options:
   -c, --component <query>   Component to file against; fuzzy-match or "Product :: Component"
   -h, --help                Show this help
-`.trim());
+`.trim(),
+  );
 }
 
+// NOTE: Keep in sync with the README.md.
 function printListHelp() {
-  console.log(`
+  console.log(
+    `
 Usage: moz-bugs list [options]
 
 List open bugs across all saved components.
@@ -500,11 +554,14 @@ Options:
                             Active = assigned + touched within 30 days;
                             Stale = assigned + no activity for 30+ days.
   -h, --help                Show this help
-`.trim());
+`.trim(),
+  );
 }
 
+// NOTE: Keep in sync with the README.md.
 function printComponentHelp() {
-  console.log(`
+  console.log(
+    `
 Usage: moz-bugs component <product> <component> [url]
        moz-bugs component <product> <component> [url] -d
 
@@ -518,11 +575,14 @@ Arguments:
 Options:
   -d, --delete    Remove the component instead of adding it
   -h, --help      Show this help
-`.trim());
+`.trim(),
+  );
 }
 
+// NOTE: Keep in sync with the README.md.
 function printTriageHelp() {
-  console.log(`
+  console.log(
+    `
 Usage: moz-bugs triage
 
 Walk through open bugs across all saved components and assign priority
@@ -536,7 +596,8 @@ and severity to any that are missing them.
 Options:
   --dryrun        Prompt as normal but do not write any changes to Bugzilla
   -h, --help      Show this help
-`.trim());
+`.trim(),
+  );
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
