@@ -289,9 +289,7 @@ function getDaysAgo(iso) {
 
 /** @param {number} days */
 function formatDaysAgo(days) {
-  if (days === 0) return "today";
-  if (days === 1) return "1 day";
-  return `${days} days`;
+  return `${days}d`;
 }
 
 /**
@@ -304,7 +302,7 @@ function computeColumnWidths(bugs) {
   let daysWidth = 0;
   for (const bug of bugs) {
     if (bug.assigned_to && bug.assigned_to !== NOBODY) {
-      assigneeWidth = Math.max(assigneeWidth, `(${formatAssignee(bug)})`.length);
+      assigneeWidth = Math.max(assigneeWidth, formatAssignee(bug).length);
     }
     if (bug.last_change_time) {
       daysWidth = Math.max(daysWidth, formatDaysAgo(getDaysAgo(bug.last_change_time)).length);
@@ -322,22 +320,22 @@ function computeColumnWidths(bugs) {
 export function printBugLine(bug, url, treeChar, widths = {}) {
   const { assigneeWidth = 0, daysWidth = 0 } = widths;
   const bugUrl = `${url}/show_bug.cgi?id=${bug.id}`;
-  const link = `\x1b]8;;${bugUrl}\x1b\\${color.green(`Bug ${bug.id}`)}\x1b]8;;\x1b\\`;
+  const link = `\x1b]8;;${bugUrl}\x1b\\${color.green(`${bug.id}`)}\x1b]8;;\x1b\\`;
   const type = formatType(bug.type);
   const priority = formatPriority(bug.priority);
   const severity = formatSeverity(bug.severity);
   const tree = treeChar ? color.blackBright(treeChar) : "";
 
   const assigneeRaw = bug.assigned_to && bug.assigned_to !== NOBODY
-    ? `(${formatAssignee(bug)})` : "";
+    ? formatAssignee(bug) : "";
   const assigneeTrail = " ".repeat(Math.max(0, assigneeWidth - assigneeRaw.length));
-  const assigneeCol = (assigneeRaw ? color.blackBright(assigneeRaw) : "") + assigneeTrail;
+  const assigneeCol = (assigneeRaw ? color.cyan(assigneeRaw) : "") + assigneeTrail;
 
   const daysRaw = bug.last_change_time ? formatDaysAgo(getDaysAgo(bug.last_change_time)) : "";
   const daysLead = " ".repeat(Math.max(0, daysWidth - daysRaw.length));
-  const daysCol = daysLead + (daysRaw ? color.blackBright(daysRaw) : "");
+  const daysCol = daysLead + (daysRaw ? color.yellow(daysRaw) : "");
 
-  console.log(`  ${link} ${type} ${priority} ${severity}  ${assigneeCol}  ${daysCol}  ${tree}${bug.summary}`);
+  console.log(`${link} ${type} ${priority} ${severity} ${assigneeCol} ${daysCol} ${tree}${bug.summary}`);
 }
 
 /**
