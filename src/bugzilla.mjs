@@ -43,23 +43,31 @@ const SEVERITY_ORDER = { S1: 0, S2: 1, S3: 2, S4: 3 };
 function makeBugComparator(fields) {
   return (a, b) => {
     for (const field of fields) {
-      let cmp = 0;
+      let delta = 0;
       switch (field) {
-        case "id": cmp = a.id - b.id; break;
+        case "id":
+          delta = a.id - b.id;
+          break;
         case "creation_time":
+          delta = (a.creation_time ?? "").localeCompare(b.creation_time ?? "");
+          break;
         case "last_change_time":
-          cmp = (a[field] ?? "").localeCompare(b[field] ?? "");
+          delta = (a.last_change_time ?? "").localeCompare(b.last_change_time ?? "");
           break;
         case "priority":
-          cmp = (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
+          delta = (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
           break;
         case "severity":
-          cmp = (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
+          delta = (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
           break;
-        case "assigned_to": cmp = a.assigned_to.localeCompare(b.assigned_to); break;
-        case "summary": cmp = a.summary.localeCompare(b.summary); break;
+        case "assigned_to":
+          delta = a.assigned_to.localeCompare(b.assigned_to);
+          break;
+        case "summary":
+          delta = a.summary.localeCompare(b.summary);
+          break;
       }
-      if (cmp !== 0) return cmp;
+      if (delta !== 0) return delta;
     }
     return 0;
   };
@@ -90,38 +98,50 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     return;
   }
 
-  const sortFields = filters.sort ?? [];
-  const cmp = makeBugComparator(
-    sortFields.includes("summary") ? sortFields : [...sortFields, "summary"]
+  const requestedSortFields = filters.sort ?? [];
+  const comparator = makeBugComparator(
+    requestedSortFields.includes("summary")
+      ? requestedSortFields
+      : [...requestedSortFields, "summary"]
   );
-  const sorted = [...bugs].sort(cmp);
-  // Batch-fetch children of all meta bugs in one request
-  const childIdSet = new Set(
+  const sorted = [...bugs].sort(comparator);
+
+  // When an explicit sort order is requested, render bugs as a flat list so
+  // the sort order is unambiguous rather than being broken up by meta-bug trees.
+  if (requestedSortFields.length > 0) {
+    for (const bug of sorted) {
+      if (!matchesBugFilter(bug, filters)) continue;
+      printBugLine(bug, url, "");
+    }
+    return;
+  }
+
+  // Default view: batch-fetch children of meta bugs and render as indented trees.
+  const metaChildIds = new Set(
     sorted
       .filter((bug) => bug.summary.toLowerCase().includes("[meta]"))
       .flatMap((bug) => bug.depends_on ?? [])
   );
-  const childIds = [...childIdSet];
 
   /** @type {Map<number, Bug>} */
   const childMap = new Map();
-  if (childIds.length > 0) {
+  if (metaChildIds.size > 0) {
     const childParams = new URLSearchParams({
       include_fields: "id,summary,type,priority,severity,assigned_to",
       resolution: "---",
     });
-    for (const id of childIds) {
+    for (const id of metaChildIds) {
       childParams.append("id", String(id));
     }
-    const children = await fetchBugs(new URL(`/rest/bug?${childParams}`, url), url, apiKey);
-    for (const child of children) {
+    const fetchedChildren = await fetchBugs(new URL(`/rest/bug?${childParams}`, url), url, apiKey);
+    for (const child of fetchedChildren) {
       childMap.set(child.id, child);
     }
   }
 
   const hasFilter = Boolean(filters.assigned || filters.priority || filters.severity);
 
-  for (const bug of sorted.filter((bug) => !childIdSet.has(bug.id))) {
+  for (const bug of sorted.filter((bug) => !metaChildIds.has(bug.id))) {
     const isMeta = bug.summary.toLowerCase().includes("[meta]");
 
     if (!isMeta) {
@@ -129,9 +149,12 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
       printBugLine(bug, url, "");
     } else {
       const children = (bug.depends_on ?? [])
-        .flatMap((id) => { const b = childMap.get(id); return b ? [b] : []; })
-        .filter((b) => matchesBugFilter(b, filters))
-        .sort(cmp);
+        .flatMap((id) => {
+          const child = childMap.get(id);
+          return child ? [child] : [];
+        })
+        .filter((child) => matchesBugFilter(child, filters))
+        .sort(comparator);
 
       if (hasFilter && children.length === 0) continue;
 
