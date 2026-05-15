@@ -415,6 +415,9 @@ function parseListFilters(args) {
           i++;
         }
         break;
+      case "--active":
+        filters.active = true;
+        break;
     }
   }
   return filters;
@@ -493,6 +496,9 @@ Options:
                             severity, assigned_to, summary
                             Summary is always appended as a final tiebreaker.
                             (e.g. --sort priority,creation)
+      --active              Show Active / Stale sections by assignee activity.
+                            Active = assigned + touched within 30 days;
+                            Stale = assigned + no activity for 30+ days.
   -h, --help                Show this help
 `.trim());
 }

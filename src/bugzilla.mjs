@@ -98,6 +98,47 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     return;
   }
 
+  if (filters.active) {
+    const NOBODY = "nobody@mozilla.org";
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const assigned = bugs
+      .filter((bug) => bug.assigned_to !== NOBODY)
+      .filter((bug) => matchesBugFilter(bug, filters));
+
+    const byRecency = (/** @type {Bug} */ a, /** @type {Bug} */ b) =>
+      (b.last_change_time ?? "").localeCompare(a.last_change_time ?? "");
+
+    const active = assigned
+      .filter((bug) => (bug.last_change_time ?? "") >= cutoff)
+      .sort(byRecency);
+
+    const stale = assigned
+      .filter((bug) => (bug.last_change_time ?? "") < cutoff)
+      .sort(byRecency);
+
+    if (active.length === 0 && stale.length === 0) {
+      console.log(color.blackBright("  (no assigned bugs)"));
+      return;
+    }
+
+    if (active.length > 0) {
+      printSectionHeader("Active", active.length);
+      for (const bug of active) {
+        printBugLine(bug, url, "");
+      }
+    }
+
+    if (stale.length > 0) {
+      printSectionHeader("Stale · last activity 30+ days ago", stale.length);
+      for (const bug of stale) {
+        printBugLine(bug, url, "");
+      }
+    }
+
+    return;
+  }
+
   const requestedSortFields = filters.sort ?? [];
   const comparator = makeBugComparator(
     requestedSortFields.includes("summary")
@@ -243,6 +284,15 @@ export function printBugLine(bug, url, treeChar) {
       ? ` ${color.blackBright(`(${bug.assigned_to})`)}`
       : "";
   console.log(`  ${link}  ${type} ${priority} ${severity} ${tree}${bug.summary}${assignee}`);
+}
+
+/**
+ * @param {string} label
+ * @param {number} count
+ */
+function printSectionHeader(label, count) {
+  const text = `── ${label} (${count} bug${count !== 1 ? "s" : ""}) ──`;
+  console.log(`\n  ${color.bold(text)}`);
 }
 
 /** @param {string} type */

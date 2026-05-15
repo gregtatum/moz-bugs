@@ -38,6 +38,7 @@ export type BugFilters = {
   priority?: string;
   severity?: string;
   sort?: string[];
+  active?: boolean;
 };
 
 export type BugComment = {
