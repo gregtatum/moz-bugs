@@ -2,6 +2,18 @@
   "name": "moz-bugs",
   "version": "0.1.0",
   "description": "CLI utilities for managing team work across Bugzilla and Jira.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gregtatum/moz-bugs.git"
+  },
+  "author": "Greg Tatum",
+  "license": "MIT",
+  "keywords": [
+    "bugzilla",
+    "jira",
+    "mozilla",
+    "cli"
+  ],
   "type": "module",
   "main": "src/index.mjs",
   "bin": {
