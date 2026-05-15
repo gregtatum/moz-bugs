@@ -87,7 +87,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     product,
     component,
     resolution: "---",
-    include_fields: "id,summary,status,assigned_to,assigned_to_detail,priority,severity,type,depends_on,creation_time,last_change_time",
+    include_fields: "id,summary,status,assigned_to,assigned_to_detail,priority,severity,type,depends_on,groups,creation_time,last_change_time",
   });
 
   const endpoint = new URL(`/rest/bug?${params}`, url);
@@ -172,7 +172,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   const childMap = new Map();
   if (metaChildIds.size > 0) {
     const childParams = new URLSearchParams({
-      include_fields: "id,summary,type,priority,severity,assigned_to,assigned_to_detail,last_change_time",
+      include_fields: "id,summary,type,priority,severity,assigned_to,assigned_to_detail,groups,last_change_time",
       resolution: "---",
     });
     for (const id of metaChildIds) {
@@ -335,7 +335,9 @@ export function printBugLine(bug, url, treeChar, widths = {}) {
   const daysLead = " ".repeat(Math.max(0, daysWidth - daysRaw.length));
   const daysCol = daysLead + (daysRaw ? color.yellow(daysRaw) : "");
 
-  console.log(`${link} ${type} ${priority} ${severity} ${assigneeCol} ${daysCol} ${tree}${bug.summary}`);
+  const isRestricted = (bug.groups?.length ?? 0) > 0;
+  const summary = isRestricted ? color.xterm(203)(bug.summary) : bug.summary;
+  console.log(`${link} ${type} ${priority} ${severity} ${assigneeCol} ${daysCol} ${tree}${summary}`);
 }
 
 /**

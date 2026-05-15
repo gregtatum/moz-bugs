@@ -24,6 +24,7 @@ export type Bug = {
   severity: string;
   type: string;
   depends_on: number[];
+  groups?: string[];
   creator?: string;
   creation_time?: string;
   last_change_time?: string;
