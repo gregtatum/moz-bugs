@@ -1,29 +1,130 @@
 # moz-bugs
 
-This tool is a CLI tool to help with managing a team's work on Bugzilla and Jira. The
-integration between the two at Mozilla is managed by
-[Jira Bugzilla Integration (JBI)](https://github.com/mozilla/jira-bugzilla-integration)
-through the automation of [whiteboard tags](https://github.com/mozilla/jira-bugzilla-integration/blob/8ed45c355ca8c71e11cd28a1a4f7fa05a51972d9/config/config.prod.yaml#L830).
-For instance, with the AI team there are:
+A CLI tool for tracking and triaging open bugs across Bugzilla components.
 
- * `[aiplatform]` - AI Platform Team
- * `[aife]` - AI Frontend Team
- * `[aimodels]` - AI Models Team
+## Example Usage
 
-When a bug is filed in Bugzilla and a whiteboard tag is added, the bug gets synced to
-a Jira ticket. This allows for engineering work to be managed in Jira. The source of
-truth is always Bugzilla as that's where the work happens.
+```
+➤ moz-bugs list
 
-There is no JBI integration for meta bugs. These bugs are a Bugzilla convention to
-add `[meta]` to the start of a bug, and then block other bugs to that one. This creates
-a heirarchy and is the Bugzilla way to organize epics of work.
+  Core :: Machine Learning: On Device  ·  102 open bugs
+├─ See Open Bugs
+├─ Recently Fixed
+└─ File New Bug
 
-## What this tool does
+Bug 2038632   tsk  -- -- [meta] "Keep the lights on" maintenance work
+Bug 2039284   tsk  P3 -- ├─ Add docs to describe the costs for passing IPC boundaries
+Bug 1984033   def  P2 -- ├─ Don't use `main` models in production
+Bug 1909230   enh  P2 -- ├─ Implement Fetch Retry with Backoff for ML Model Downloads (atossou@mozilla.com)
+Bug 2039404   tsk  P3 -- └─ Review the quality of errors reported to WebExtension devs using on-device inference
+```
 
-This tool is going to be a collection of utilities to automate some of the process for
-adding whiteboard tags, tracking metabugs, and tracking work so that it all is reflected
-in Jira correctly.
+## Installation
+
+Install from npm to get the tool on your PATH:
+
+```sh
+npm install -g moz-bugs
+```
+
+Or run it ad-hoc with `npx`:
+
+```sh
+npx moz-bugs
+```
+
+Add a Bugzilla component to track — you will be prompted for an API key the first time:
+
+```sh
+moz-bugs component "Core" "Machine Learning: On Device"
+```
+
+API keys can be generated at `https://bugzilla.mozilla.org/userprefs.cgi?tab=apikey`.
+
+## Usage
+
+Save one or more components first, then run `moz-bugs list` to see open bugs across all of them.
+
+### Command reference
+
+- List open bugs across all saved components  
+  `moz-bugs list`
+- Save or remove a Bugzilla component  
+  `moz-bugs component <product> <component> [url]`  
+  `moz-bugs component <product> <component> [url] --delete`
+- Open a browser tab to file a new bug  
+  `moz-bugs file`  
+  `moz-bugs file --component <query>`
+- Interactively assign priority/severity to untriaged bugs  
+  `moz-bugs triage`  
+  `moz-bugs triage --dryrun`
+
+### list
+
+```sh
+moz-bugs list [options]
+```
+
+| Flag | Description |
+|---|---|
+| `-c, --component <query>` | Fuzzy-match against saved components, or use `"Product :: Component"` to query directly without a saved config |
+| `-a, --assigned <query>` | Show only bugs whose assignee fuzzy-matches `<query>` |
+| `-p, --priority <value>` | Filter by priority (e.g. `p1`, `P2`, `1`) |
+| `-v, --severity <value>` | Filter by severity (e.g. `s1`, `S2`, `3`) |
+| `-s, --sort <fields>` | Comma-separated sort fields, fuzzy-matched (e.g. `--sort priority,creation`) |
+
+Valid sort fields: `id`, `creation_time`, `last_change_time`, `priority`, `severity`, `assigned_to`, `summary`. Summary is always appended as the final tiebreaker.
+
+Meta bugs (`[meta]` in the summary) are shown as indented trees with their child bugs nested beneath them. Passing `--sort` switches to a flat list instead.
+
+### component
+
+```sh
+# Add a component
+moz-bugs component "Core" "Machine Learning: On Device"
+
+# Add a component from a non-default Bugzilla instance
+moz-bugs component "Core" "Machine Learning: On Device" https://bugzilla-dev.allizom.org
+
+# Remove a saved component
+moz-bugs component "Core" "Machine Learning: On Device" --delete
+```
+
+### file
+
+Opens a browser tab pre-filled with the product and component for filing a new bug. With no flags, shows an interactive picker of saved components.
+
+```sh
+# Interactive picker
+moz-bugs file
+
+# Jump straight to a specific component
+moz-bugs file -c "Core :: Machine Learning: On Device"
+```
+
+### triage
+
+Walks through open bugs across all saved components and prompts to assign priority and severity to any that are unset. Requires a Bugzilla API key with write access.
+
+```sh
+moz-bugs triage
+
+# Prompt as normal but do not write any changes to Bugzilla
+moz-bugs triage --dryrun
+```
 
 ## Development
 
 - `npm run ts` runs TypeScript against the JSDoc annotations.
+
+## Publishing
+
+Login to npm via `npm login`, then run the helper script from the repo root:
+
+```sh
+./publish.sh [patch|minor|major]
+```
+
+## AI Use Disclosure
+
+This tool was primarily authored using AI agentic programming flows.
