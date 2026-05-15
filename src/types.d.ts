@@ -19,6 +19,7 @@ export type Bug = {
   summary: string;
   status: string;
   assigned_to: string;
+  assigned_to_detail?: { real_name: string; name: string; id: number };
   priority: string;
   severity: string;
   type: string;

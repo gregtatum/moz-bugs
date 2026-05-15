@@ -36,6 +36,8 @@ const PRIORITY_ORDER = { P1: 0, P2: 1, P3: 2, P4: 3, P5: 4 };
 /** @type {Record<string,number>} */
 const SEVERITY_ORDER = { S1: 0, S2: 1, S3: 2, S4: 3 };
 
+const NOBODY = "nobody@mozilla.org";
+
 /**
  * @param {string[]} fields
  * @returns {(a: Bug, b: Bug) => number}
@@ -85,7 +87,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     product,
     component,
     resolution: "---",
-    include_fields: "id,summary,status,assigned_to,priority,severity,type,depends_on,creation_time,last_change_time",
+    include_fields: "id,summary,status,assigned_to,assigned_to_detail,priority,severity,type,depends_on,creation_time,last_change_time",
   });
 
   const endpoint = new URL(`/rest/bug?${params}`, url);
@@ -99,7 +101,6 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   }
 
   if (filters.active) {
-    const NOBODY = "nobody@mozilla.org";
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const assigned = bugs
@@ -122,17 +123,19 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
       return;
     }
 
+    const widths = computeColumnWidths([...active, ...stale]);
+
     if (active.length > 0) {
       printSectionHeader("Active", active.length);
       for (const bug of active) {
-        printBugLine(bug, url, "");
+        printBugLine(bug, url, "", widths);
       }
     }
 
     if (stale.length > 0) {
       printSectionHeader("Stale · last activity 30+ days ago", stale.length);
       for (const bug of stale) {
-        printBugLine(bug, url, "");
+        printBugLine(bug, url, "", widths);
       }
     }
 
@@ -150,9 +153,10 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   // When an explicit sort order is requested, render bugs as a flat list so
   // the sort order is unambiguous rather than being broken up by meta-bug trees.
   if (requestedSortFields.length > 0) {
-    for (const bug of sorted) {
-      if (!matchesBugFilter(bug, filters)) continue;
-      printBugLine(bug, url, "");
+    const visible = sorted.filter((bug) => matchesBugFilter(bug, filters));
+    const widths = computeColumnWidths(visible);
+    for (const bug of visible) {
+      printBugLine(bug, url, "", widths);
     }
     return;
   }
@@ -168,7 +172,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   const childMap = new Map();
   if (metaChildIds.size > 0) {
     const childParams = new URLSearchParams({
-      include_fields: "id,summary,type,priority,severity,assigned_to",
+      include_fields: "id,summary,type,priority,severity,assigned_to,assigned_to_detail,last_change_time",
       resolution: "---",
     });
     for (const id of metaChildIds) {
@@ -181,13 +185,14 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   }
 
   const hasFilter = Boolean(filters.assigned || filters.priority || filters.severity);
+  const widths = computeColumnWidths([...sorted, ...Array.from(childMap.values())]);
 
   for (const bug of sorted.filter((bug) => !metaChildIds.has(bug.id))) {
     const isMeta = bug.summary.toLowerCase().includes("[meta]");
 
     if (!isMeta) {
       if (!matchesBugFilter(bug, filters)) continue;
-      printBugLine(bug, url, "");
+      printBugLine(bug, url, "", widths);
     } else {
       const children = (bug.depends_on ?? [])
         .flatMap((id) => {
@@ -199,10 +204,10 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
 
       if (hasFilter && children.length === 0) continue;
 
-      printBugLine(bug, url, "");
+      printBugLine(bug, url, "", widths);
       for (let i = 0; i < children.length; i++) {
         const isLast = i === children.length - 1;
-        printBugLine(children[i], url, isLast ? "└─ " : "├─ ");
+        printBugLine(children[i], url, isLast ? "└─ " : "├─ ", widths);
       }
       if (children.length > 0) console.log("");
     }
@@ -268,22 +273,71 @@ function termLink(text, url) {
 }
 
 /**
+ * Returns :nick if the real_name contains [:nick], otherwise the email username.
+ * @param {Bug} bug
+ */
+function formatAssignee(bug) {
+  const nickMatch = (bug.assigned_to_detail?.real_name ?? "").match(/\[:([^\]]+)\]/);
+  if (nickMatch) return nickMatch[1];
+  return bug.assigned_to.split("@")[0];
+}
+
+/** @param {string} iso */
+function getDaysAgo(iso) {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+
+/** @param {number} days */
+function formatDaysAgo(days) {
+  if (days === 0) return "today";
+  if (days === 1) return "1 day";
+  return `${days} days`;
+}
+
+/**
+ * Pre-compute column widths for aligned rendering across a set of bugs.
+ * @param {Bug[]} bugs
+ * @returns {{ assigneeWidth: number, daysWidth: number }}
+ */
+function computeColumnWidths(bugs) {
+  let assigneeWidth = 0;
+  let daysWidth = 0;
+  for (const bug of bugs) {
+    if (bug.assigned_to && bug.assigned_to !== NOBODY) {
+      assigneeWidth = Math.max(assigneeWidth, `(${formatAssignee(bug)})`.length);
+    }
+    if (bug.last_change_time) {
+      daysWidth = Math.max(daysWidth, formatDaysAgo(getDaysAgo(bug.last_change_time)).length);
+    }
+  }
+  return { assigneeWidth, daysWidth };
+}
+
+/**
  * @param {Bug} bug
  * @param {string} url
  * @param {string} treeChar
+ * @param {{ assigneeWidth?: number, daysWidth?: number }} [widths]
  */
-export function printBugLine(bug, url, treeChar) {
+export function printBugLine(bug, url, treeChar, widths = {}) {
+  const { assigneeWidth = 0, daysWidth = 0 } = widths;
   const bugUrl = `${url}/show_bug.cgi?id=${bug.id}`;
   const link = `\x1b]8;;${bugUrl}\x1b\\${color.green(`Bug ${bug.id}`)}\x1b]8;;\x1b\\`;
   const type = formatType(bug.type);
   const priority = formatPriority(bug.priority);
   const severity = formatSeverity(bug.severity);
-  const tree = treeChar ? `${color.blackBright(treeChar)}` : "";
-  const assignee =
-    bug.assigned_to && bug.assigned_to !== "nobody@mozilla.org"
-      ? ` ${color.blackBright(`(${bug.assigned_to})`)}`
-      : "";
-  console.log(`  ${link}  ${type} ${priority} ${severity} ${tree}${bug.summary}${assignee}`);
+  const tree = treeChar ? color.blackBright(treeChar) : "";
+
+  const assigneeRaw = bug.assigned_to && bug.assigned_to !== NOBODY
+    ? `(${formatAssignee(bug)})` : "";
+  const assigneeTrail = " ".repeat(Math.max(0, assigneeWidth - assigneeRaw.length));
+  const assigneeCol = (assigneeRaw ? color.blackBright(assigneeRaw) : "") + assigneeTrail;
+
+  const daysRaw = bug.last_change_time ? formatDaysAgo(getDaysAgo(bug.last_change_time)) : "";
+  const daysLead = " ".repeat(Math.max(0, daysWidth - daysRaw.length));
+  const daysCol = daysLead + (daysRaw ? color.blackBright(daysRaw) : "");
+
+  console.log(`  ${link} ${type} ${priority} ${severity}  ${assigneeCol}  ${daysCol}  ${tree}${bug.summary}`);
 }
 
 /**
