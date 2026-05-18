@@ -252,9 +252,9 @@ function printHeader(product, component, url, bugCount, filters) {
   const p = encodeURIComponent(product);
   const c = encodeURIComponent(component);
   const openParams = new URLSearchParams({ product, component, bug_status: "__open__" });
-  if (filters.priority) openParams.append("priority", filters.priority);
-  if (filters.severity) openParams.append("bug_severity", filters.severity);
-  if (filters.assigned) {
+  if (filters?.priority) openParams.append("priority", filters.priority);
+  if (filters?.severity) openParams.append("bug_severity", filters.severity);
+  if (filters?.assigned) {
     openParams.append("emailtype1", "substring");
     openParams.append("emailassigned_to1", "1");
     openParams.append("email1", filters.assigned);
