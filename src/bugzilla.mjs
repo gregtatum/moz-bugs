@@ -93,7 +93,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   const endpoint = new URL(`/rest/bug?${params}`, url);
   const bugs = await fetchBugs(endpoint, url, apiKey);
 
-  printHeader(product, component, url, bugs.length);
+  printHeader(product, component, url, bugs.length, filters);
 
   if (bugs.length === 0) {
     console.log(color.blackBright("  (no open bugs)"));
@@ -246,11 +246,20 @@ export async function fetchBugs(endpoint, url, apiKey) {
  * @param {string} component
  * @param {string} url
  * @param {number} bugCount
+ * @param {BugFilters} [filters]
  */
-function printHeader(product, component, url, bugCount) {
+function printHeader(product, component, url, bugCount, filters) {
   const p = encodeURIComponent(product);
   const c = encodeURIComponent(component);
-  const openUrl  = `${url}/buglist.cgi?product=${p}&component=${c}&bug_status=__open__`;
+  const openParams = new URLSearchParams({ product, component, bug_status: "__open__" });
+  if (filters.priority) openParams.append("priority", filters.priority);
+  if (filters.severity) openParams.append("bug_severity", filters.severity);
+  if (filters.assigned) {
+    openParams.append("emailtype1", "substring");
+    openParams.append("emailassigned_to1", "1");
+    openParams.append("email1", filters.assigned);
+  }
+  const openUrl  = `${url}/buglist.cgi?${openParams}`;
   const fixedUrl = `${url}/buglist.cgi?product=${p}&component=${c}&chfield=resolution&chfieldfrom=-6m&chfieldvalue=FIXED&bug_status=__closed__`;
   const fileUrl  = `${url}/enter_bug.cgi?product=${p}&component=${c}`;
 
