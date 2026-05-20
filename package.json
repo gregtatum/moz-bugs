@@ -28,9 +28,11 @@
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "cli-color": "^1.4.0"
+    "cli-color": "^1.4.0",
+    "neo-blessed": "^0.2.0"
   },
   "devDependencies": {
+    "@types/blessed": "^0.1.27",
     "@types/cli-color": "^2.0.6",
     "@types/node": "^24.10.1",
     "typescript": "^5.9.3"

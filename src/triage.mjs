@@ -1,6 +1,7 @@
 // @ts-check
 import color from "cli-color";
-import { fetchBugs, printBugLine } from "./bugzilla.mjs";
+import { fetchBugs, printBugLine, updateBug } from "./bugzilla.mjs";
+import { needsTriage } from "./query.mjs";
 
 /** @typedef {import("./types.d.ts").Bug} Bug */
 /** @typedef {import("./types.d.ts").BugzillaAuth} BugzillaAuth */
@@ -80,14 +81,6 @@ async function triageComponent(config, auth, dryRun) {
   for (const bug of toTriage) {
     await triageBug(bug, url, auth?.apiKey ?? null, dryRun);
   }
-}
-
-/** @param {Bug} bug */
-function needsTriage(bug) {
-  return (
-    !bug.summary.toLowerCase().includes("[meta]") &&
-    (bug.priority === "--" || (bug.type === "defect" && bug.severity === "--"))
-  );
 }
 
 /**
@@ -305,24 +298,3 @@ async function fetchBugDescription(bugId, url, apiKey) {
   }
 }
 
-/**
- * @param {number} bugId
- * @param {string} url
- * @param {string} apiKey
- * @param {Record<string, string>} updates
- */
-async function updateBug(bugId, url, apiKey, updates) {
-  const endpoint = new URL(`/rest/bug/${bugId}`, url);
-  const response = await fetch(endpoint, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Bugzilla-API-Key": apiKey,
-    },
-    body: JSON.stringify(updates),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to update bug ${bugId}: ${response.status} ${text}`);
-  }
-}

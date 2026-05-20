@@ -69,6 +69,14 @@ export function normalizeSFilter(v) {
   return `S${v.toUpperCase().replace(/^S/, "")}`;
 }
 
+/** @param {import("./types.d.ts").Bug} bug */
+export function needsTriage(bug) {
+  return (
+    !bug.summary.toLowerCase().includes("[meta]") &&
+    (bug.priority === "--" || (bug.type === "defect" && bug.severity === "--"))
+  );
+}
+
 /**
  * @param {string} input
  * @returns {string}

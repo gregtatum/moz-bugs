@@ -53,6 +53,23 @@ export type ComponentBugsData = {
   stale?: Bug[];
 };
 
+export type UpdateStatus = "pending" | "approved" | "denied" | "failed";
+
+export type PendingBugUpdate = {
+  id: string;
+  bugId: number;
+  summary: string;
+  url: string;
+  updates: {
+    priority?: string;
+    severity?: string;
+    assigned_to?: string;
+  };
+  status: UpdateStatus;
+  proposedAt: string;
+  resolvedAt: string | null;
+};
+
 export type BugComment = {
   text: string;
   count: number;
