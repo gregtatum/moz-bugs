@@ -458,6 +458,31 @@ function formatPriority(priority) {
 }
 
 /**
+ * Fetches the first comment (description) for a bug.
+ * @param {number} bugId
+ * @param {string} url
+ * @param {string | undefined} apiKey
+ * @returns {Promise<string>}
+ */
+export async function fetchBugDescription(bugId, url, apiKey) {
+  /** @type {HeadersInit} */
+  const headers = { "Content-Type": "application/json" };
+  if (apiKey) headers["X-Bugzilla-API-Key"] = apiKey;
+  try {
+    const params = new URLSearchParams({ include_fields: "text,count" });
+    const res = await fetch(new URL(`/rest/bug/${bugId}/comment?${params}`, url), { headers });
+    if (!res.ok) return "";
+    /** @type {import("./types.d.ts").BugCommentResponse} */
+    const json = await res.json();
+    const comments = json.bugs[String(bugId)]?.comments ?? [];
+    const first = comments.find((c) => c.count === 0) ?? comments[0];
+    return first?.text ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Fetches a single bug with full fields plus its description (first comment).
  * @param {number} bugId
  * @param {string} url
@@ -476,23 +501,7 @@ export async function getBugDetails(bugId, url, apiKey) {
   const bug = bugs[0];
   if (!bug) return null;
 
-  /** @type {HeadersInit} */
-  const headers = { "Content-Type": "application/json" };
-  if (apiKey) headers["X-Bugzilla-API-Key"] = apiKey;
-
-  let description = "";
-  try {
-    const commentParams = new URLSearchParams({ include_fields: "text,count" });
-    const res = await fetch(new URL(`/rest/bug/${bugId}/comment?${commentParams}`, url), { headers });
-    if (res.ok) {
-      /** @type {import("./types.d.ts").BugCommentResponse} */
-      const json = await res.json();
-      const comments = json.bugs[String(bugId)]?.comments ?? [];
-      const first = comments.find((c) => c.count === 0) ?? comments[0];
-      description = first?.text ?? "";
-    }
-  } catch { /* description stays empty */ }
-
+  const description = await fetchBugDescription(bugId, url, apiKey);
   return { bug, description };
 }
 

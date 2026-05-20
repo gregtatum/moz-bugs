@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { getComponentBugs, getBugDetails } from "./bugzilla.mjs";
+import { getComponentBugs, getBugDetails, fetchBugDescription } from "./bugzilla.mjs";
 import { getComponentConfigs, getBugzillaAuth } from "./store.mjs";
 import {
   resolveComponentQuery,
@@ -26,6 +26,7 @@ import { Tui } from "./tui.mjs";
 /** @typedef {import("./types.d.ts").PendingBugUpdate} PendingBugUpdate */
 
 const PORT = 50044;
+const TRIAGE_SNIPPET_LENGTH = 500;
 const HOST = "127.0.0.1";
 const LOG_PATH = join(homedir(), ".moz-bugs-mcp.log");
 
@@ -95,8 +96,9 @@ const TOOL_DEFINITIONS = [
       "List open bugs that need triage. A bug needs triage if: its priority is '--' (any type), " +
       "OR it is a defect with severity '--'. Severity is only relevant for defects — tasks and " +
       "enhancements do not have a severity requirement. Meta bugs (summary contains '[meta]') are " +
-      "excluded. Returns structured bug objects including the 'type' field (defect/enhancement/task) " +
-      "which is essential for determining what triage fields apply.",
+      "excluded. Returns structured bug objects including the 'type' field (defect/enhancement/task), " +
+      "which is essential for determining what triage fields apply, plus a 'description_snippet'. " +
+      "Call get_bug for the full description.",
     annotations: { readOnlyHint: true, destructiveHint: false },
     inputSchema: {
       type: "object",
@@ -309,17 +311,27 @@ async function handleListTriageBugs(args) {
     results.push(data);
   }
 
-  const payload = results.map((d) => {
+  const payload = await Promise.all(results.map(async (d) => {
     const triage = d.bugs.filter(needsTriage);
+    const auth = getBugzillaAuth(d.url);
+
+    const bugsWithSnippets = await Promise.all(triage.map(async (b) => {
+      const description = await fetchBugDescription(b.id, d.url, auth?.apiKey);
+      return {
+        ...bugToJson(b, d.url),
+        description_snippet: description.slice(0, TRIAGE_SNIPPET_LENGTH),
+      };
+    }));
+
     return {
       product: d.product,
       component: d.component,
       url: d.url,
       totalFetched: d.totalFetched,
       triageCount: triage.length,
-      bugs: triage.map((b) => bugToJson(b, d.url)),
+      bugs: bugsWithSnippets,
     };
-  });
+  }));
 
   return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
 }
