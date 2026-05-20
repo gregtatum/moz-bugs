@@ -523,10 +523,10 @@ function printMcpHelp() {
     `
 Usage: moz-bugs mcp
 
-Start an MCP (Model Context Protocol) server that exposes your saved
-Bugzilla components as AI-accessible tools.
+Start an MCP (Model Context Protocol) HTTP server on localhost:50044.
+You must have this running before connecting an AI client to it.
 
-The server communicates via stdio and logs to ~/.moz-bugs-mcp.log.
+The server logs to ~/.moz-bugs-mcp.log.
 Use \`tail -f ~/.moz-bugs-mcp.log\` to monitor activity.
 
 Tools exposed (read-only):
@@ -538,7 +538,7 @@ To add to Claude Desktop, edit:
   ~/Library/Application Support/Claude/claude_desktop_config.json
 
 To add to Claude Code:
-  claude mcp add moz-bugs -- moz-bugs mcp
+  claude mcp add --transport http moz-bugs http://127.0.0.1:50044
 
 Options:
   -h, --help        Show this help

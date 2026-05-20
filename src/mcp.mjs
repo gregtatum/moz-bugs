@@ -1,9 +1,11 @@
 // @ts-check
+import { createServer } from "node:http";
 import { createWriteStream } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { randomUUID } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { getComponentBugs } from "./bugzilla.mjs";
 import { getComponentConfigs, getBugzillaAuth } from "./store.mjs";
@@ -20,6 +22,8 @@ import {
 /** @typedef {import("./types.d.ts").BugFilters} BugFilters */
 /** @typedef {import("./types.d.ts").ComponentBugsData} ComponentBugsData */
 
+const PORT = 50044;
+const HOST = "127.0.0.1";
 const LOG_PATH = join(homedir(), ".moz-bugs-mcp.log");
 
 /** @type {import("node:fs").WriteStream} */
@@ -189,28 +193,22 @@ function handleListComponents() {
   return { content: [{ type: "text", text: JSON.stringify(components, null, 2) }] };
 }
 
-function printSetupInstructions() {
-  process.stderr.write(`
-moz-bugs MCP server starting...
+/** @param {string} url */
+function printSetupInstructions(url) {
+  process.stdout.write(`
+moz-bugs MCP server running at ${url}
 Log: ${LOG_PATH}  (tail -f to monitor)
 
 To add to Claude Desktop (~/Library/Application Support/Claude/claude_desktop_config.json):
 
-  {
-    "mcpServers": {
-      "moz-bugs": {
-        "command": "moz-bugs",
-        "args": ["mcp"]
-      }
-    }
-  }
-
 To add to Claude Code:
-  claude mcp add moz-bugs -- moz-bugs mcp
+  claude mcp add --transport http moz-bugs ${url}
 
-Tools available:
-  list_bugs         List open bugs (supports component, assigned, priority, severity, sort, active)
+Tools available (read-only):
+  list_bugs         List open bugs (component, assigned, priority, severity, sort, active)
   list_components   List saved component configs
+
+Press Ctrl+C to stop.
 
 `.trimStart());
 }
@@ -218,11 +216,33 @@ Tools available:
 export async function runMcpServer() {
   logStream = createWriteStream(LOG_PATH, { flags: "w" });
 
-  printSetupInstructions();
+  const components = getComponentConfigs();
+  const componentList = components.length > 0
+    ? components.map((c) => `  - ${c.product} :: ${c.component} (${c.url})`).join("\n")
+    : "  (none saved — use `moz-bugs component` to add some)";
 
+    // TODO - This was implemented with the deprecated class Server.
+    // > "Use `McpServer` instead for the high-level API. Only use `Server`
+    // > for advanced use cases."
   const server = new Server(
     { name: "moz-bugs", version: "2.2.0" },
-    { capabilities: { tools: {} } },
+    {
+      capabilities: { tools: {} },
+      instructions: `You are connected to a read-only Bugzilla MCP server for moz-bugs.
+
+Saved components being tracked:
+${componentList}
+
+Available tools:
+- list_bugs: Fetch open bugs for saved components (by default, unless the component
+  argument is is used). Supports filters: component (fuzzy-match or "Product :: Component"),
+  assigned (fuzzy-match), priority (P1–P5), severity (S1–S4), sort (comma-separated fields),
+  active (boolean — splits into active/stale by 30-day activity).
+- list_components: List the saved component configurations above.
+
+This server is read-only. No bug modifications are possible through this interface.
+When the user asks about bugs, use list_bugs. When uncertain which components exist, use list_components.`,
+    },
   );
 
   server.setRequestHandler(ListToolsRequestSchema, () => {
@@ -247,14 +267,29 @@ export async function runMcpServer() {
     }
   });
 
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
+  await server.connect(transport);
+
+  const httpServer = createServer((req, res) => {
+    log(`${req.method} ${req.url}`);
+    transport.handleRequest(req, res);
+  });
+
+  const url = `http://${HOST}:${PORT}`;
+
+  await new Promise((resolve, reject) => {
+    httpServer.listen(PORT, HOST, () => resolve(undefined));
+    httpServer.once("error", reject);
+  });
+
+  printSetupInstructions(url);
+  log(`listening on ${url}`);
+
   process.on("SIGINT", async () => {
     log("shutting down");
     await server.close();
+    httpServer.close();
     logStream.end();
     process.exit(0);
   });
-
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  log("connected");
 }
