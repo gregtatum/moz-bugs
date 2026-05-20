@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { getComponentBugs } from "./bugzilla.mjs";
+import { getComponentBugs, getBugDetails } from "./bugzilla.mjs";
 import { getComponentConfigs, getBugzillaAuth } from "./store.mjs";
 import {
   resolveComponentQuery,
@@ -156,6 +156,21 @@ const TOOL_DEFINITIONS = [
       "'denied' (rejected by user), or 'failed' (approved but write failed).",
     annotations: { readOnlyHint: true, destructiveHint: false },
     inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_bug",
+    description:
+      "Fetch full details for a single bug including its description (first comment). " +
+      "Returns all standard fields plus a 'description' field with the bug's original text.",
+    annotations: { readOnlyHint: true, destructiveHint: false },
+    inputSchema: {
+      type: "object",
+      required: ["bugId", "url"],
+      properties: {
+        bugId: { type: "number", description: "Bugzilla bug ID." },
+        url: { type: "string", description: "Bugzilla instance URL (e.g. https://bugzilla.mozilla.org)." },
+      },
+    },
   },
   {
     name: "list_components",
@@ -396,6 +411,35 @@ function handleListPendingUpdates(tui) {
 }
 
 /**
+ * @param {Record<string, unknown>} args
+ * @returns {Promise<{content: Array<{type: "text", text: string}>, isError?: boolean}>}
+ */
+async function handleGetBug(args) {
+  if (typeof args.bugId !== "number" || !Number.isInteger(args.bugId)) {
+    return { content: [{ type: "text", text: "bugId must be an integer." }], isError: true };
+  }
+  if (typeof args.url !== "string" || !args.url) {
+    return { content: [{ type: "text", text: "url is required." }], isError: true };
+  }
+
+  const auth = getBugzillaAuth(args.url);
+  const result = await getBugDetails(args.bugId, args.url, auth?.apiKey);
+
+  if (!result) {
+    return { content: [{ type: "text", text: `Bug ${args.bugId} not found.` }], isError: true };
+  }
+
+  const payload = {
+    ...bugToJson(result.bug, args.url),
+    creator: result.bug.creator,
+    creation_time: result.bug.creation_time,
+    description: result.description,
+  };
+
+  return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
+}
+
+/**
  * @returns {{content: Array<{type: "text", text: string}>}}
  */
 function handleListComponents() {
@@ -431,6 +475,7 @@ ${componentList}
 Available tools:
 - list_bugs: Fetch open bugs for saved components. Filters: component, assigned, priority, severity, sort, active.
 - list_triage_bugs: Fetch bugs needing triage (missing priority or severity). Filter: component.
+- get_bug: Fetch full details for a single bug including its description (first comment/STR).
 - propose_bug_update: Queue a field update (priority, severity, assigned_to) for user approval.
   The user must approve updates in the terminal — writes are never automatic.
   After proposing, use list_pending_updates to check whether the user approved or denied.
@@ -456,6 +501,7 @@ This server requires user approval for all writes. Read operations are immediate
       switch (name) {
         case "list_bugs":            return await handleListBugs(args);
         case "list_triage_bugs":     return await handleListTriageBugs(args);
+        case "get_bug":              return await handleGetBug(args);
         case "propose_bug_update":   return handleProposeBugUpdate(args, tui);
         case "list_pending_updates": return handleListPendingUpdates(tui);
         case "list_components":      return handleListComponents();
@@ -487,7 +533,7 @@ This server requires user approval for all writes. Read operations are immediate
   log(`moz-bugs MCP server listening on ${url}`);
   log(`Log: ${LOG_PATH}`);
   log(`Add to Claude Code: claude mcp add --transport http moz-bugs ${url}`);
-  log(`Tools: list_bugs, list_triage_bugs, propose_bug_update, list_pending_updates, list_components`);
+  log(`Tools: list_bugs, list_triage_bugs, get_bug, propose_bug_update, list_pending_updates, list_components`);
 
   process.on("SIGINT", async () => {
     log("shutting down");

@@ -458,6 +458,45 @@ function formatPriority(priority) {
 }
 
 /**
+ * Fetches a single bug with full fields plus its description (first comment).
+ * @param {number} bugId
+ * @param {string} url
+ * @param {string | undefined} apiKey
+ * @returns {Promise<{ bug: Bug; description: string } | null>}
+ */
+export async function getBugDetails(bugId, url, apiKey) {
+  const params = new URLSearchParams({
+    include_fields:
+      "id,summary,status,assigned_to,assigned_to_detail,priority,severity,type," +
+      "depends_on,groups,creator,creation_time,last_change_time",
+  });
+  params.append("id", String(bugId));
+
+  const bugs = await fetchBugs(new URL(`/rest/bug?${params}`, url), url, apiKey);
+  const bug = bugs[0];
+  if (!bug) return null;
+
+  /** @type {HeadersInit} */
+  const headers = { "Content-Type": "application/json" };
+  if (apiKey) headers["X-Bugzilla-API-Key"] = apiKey;
+
+  let description = "";
+  try {
+    const commentParams = new URLSearchParams({ include_fields: "text,count" });
+    const res = await fetch(new URL(`/rest/bug/${bugId}/comment?${commentParams}`, url), { headers });
+    if (res.ok) {
+      /** @type {import("./types.d.ts").BugCommentResponse} */
+      const json = await res.json();
+      const comments = json.bugs[String(bugId)]?.comments ?? [];
+      const first = comments.find((c) => c.count === 0) ?? comments[0];
+      description = first?.text ?? "";
+    }
+  } catch { /* description stays empty */ }
+
+  return { bug, description };
+}
+
+/**
  * @param {number} bugId
  * @param {string} url
  * @param {string} apiKey
