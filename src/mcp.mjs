@@ -119,6 +119,8 @@ const TOOL_DEFINITIONS = [
       "approve or deny — it is NOT written to Bugzilla immediately. " +
       "Supported fields: priority (all bug types), severity (defects only), type, assigned_to. " +
       "Do NOT set severity on enhancements or tasks — severity only applies to defects. " +
+      "A required 'reason' field must explain why the change is proposed — shown to the user " +
+      "in the approval UI; can be brief ('The user requested it') or a short rationale. " +
       "Returns { queued: true, updateId } on success. " +
       "Use list_pending_updates to check whether the user has approved or denied proposals. " +
       `Priority levels: ${PRIORITY_DESCRIPTIONS}. ` +
@@ -126,11 +128,12 @@ const TOOL_DEFINITIONS = [
     annotations: { readOnlyHint: false, destructiveHint: false },
     inputSchema: {
       type: "object",
-      required: ["bugId", "summary", "url", "updates"],
+      required: ["bugId", "summary", "url", "updates", "reason"],
       properties: {
         bugId: { type: "number", description: "Bugzilla bug ID." },
         summary: { type: "string", description: "Bug summary, used for display in the approval TUI." },
         url: { type: "string", description: "Bugzilla instance URL (e.g. https://bugzilla.mozilla.org)." },
+        reason: { type: "string", description: "Why this update is proposed. Shown to the user before they approve. Can be brief ('The user requested it') or a short rationale based on bug context." },
         updates: {
           type: "object",
           description: "Fields to update. At least one field is required.",
@@ -342,7 +345,7 @@ async function handleListTriageBugs(args) {
  * @returns {{content: Array<{type: "text", text: string}>, isError?: boolean}}
  */
 function handleProposeBugUpdate(args, tui) {
-  const { bugId, summary, url, updates } = args;
+  const { bugId, summary, url, updates, reason } = args;
 
   if (typeof bugId !== "number" || !Number.isInteger(bugId)) {
     return { content: [{ type: "text", text: "bugId must be an integer." }], isError: true };
@@ -352,6 +355,9 @@ function handleProposeBugUpdate(args, tui) {
   }
   if (typeof url !== "string" || !url) {
     return { content: [{ type: "text", text: "url is required." }], isError: true };
+  }
+  if (typeof reason !== "string" || !reason.trim()) {
+    return { content: [{ type: "text", text: "reason is required." }], isError: true };
   }
   if (!updates || typeof updates !== "object") {
     return { content: [{ type: "text", text: "updates object is required." }], isError: true };
@@ -403,6 +409,7 @@ function handleProposeBugUpdate(args, tui) {
     summary,
     url,
     updates: validatedUpdates,
+    reason,
     status: "pending",
     proposedAt: new Date().toISOString(),
     resolvedAt: null,

@@ -66,6 +66,7 @@ export type PendingBugUpdate = {
     type?: string;
     assigned_to?: string;
   };
+  reason: string;
   status: UpdateStatus;
   proposedAt: string;
   resolvedAt: string | null;

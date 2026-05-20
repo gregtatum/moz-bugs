@@ -1,4 +1,5 @@
 // @ts-check
+import color from "cli-color";
 import blessed from "neo-blessed";
 import { updateBug } from "./bugzilla.mjs";
 
@@ -53,6 +54,7 @@ export class Tui {
       height: "30%",
       border: { type: "line" },
       label: " Pending Updates ",
+      scrollable: true,
       style: { border: { fg: "yellow" }, label: { fg: "yellow" } },
     });
 
@@ -88,8 +90,9 @@ export class Tui {
       }
       /** @type {Record<string, string>} */
       const updates = {};
-      if (item.updates.priority) updates.priority = item.updates.priority;
-      if (item.updates.severity) updates.severity = item.updates.severity;
+      if (item.updates.priority)    updates.priority    = item.updates.priority;
+      if (item.updates.severity)    updates.severity    = item.updates.severity;
+      if (item.updates.type)        updates.type        = item.updates.type;
       if (item.updates.assigned_to) updates.assigned_to = item.updates.assigned_to;
       try {
         await updateBug(item.bugId, item.url, auth.apiKey, updates);
@@ -172,20 +175,54 @@ export class Tui {
     }
 
     const idx = Math.min(this._selectedIdx, pending.length - 1);
-    const item = pending[idx];
-    const cols = this._screen.width ?? 80;
+    // -4: border (2) + inner padding (2)
+    const cols = Math.max(40, (this._screen.width ?? 80) - 4);
 
-    const lines = [
-      `  Pending Updates (${pending.length})`,
-      ``,
-      `  > Bug ${item.bugId} · ${formatUpdatesSummary(item.updates)}`,
-      `  "${item.summary.slice(0, cols - 6)}"`,
-      `  ${item.url}/show_bug.cgi?id=${item.bugId}`,
-      ``,
-      `  [a]pprove  [d]eny  [↑↓] navigate (${idx + 1}/${pending.length})  [q]uit`,
-    ];
+    /** @type {string[]} */
+    const lines = [];
+    lines.push(
+      `  ${color.yellow(`Pending (${pending.length})`)}  ` +
+      color.blackBright("[a]pprove  [d]eny  [↑↓] navigate  [q]uit")
+    );
+    lines.push("");
+
+    let selectedLine = 2;
+
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i];
+      const isSelected = i === idx;
+
+      if (isSelected) selectedLine = lines.length;
+
+      // Build title line
+      const cursor    = isSelected ? color.cyan(">") : " ";
+      const bugIdStr  = color.green(String(item.bugId));
+      const badges    = formatUpdateBadges(item.updates);
+      // Compute visual prefix width to know how much space remains for summary
+      const prefixVis = 4 + String(item.bugId).length + 2 + stripAnsi(badges).length + 2;
+      const summaryMax = Math.max(8, cols - prefixVis);
+      const summary   = item.summary.length > summaryMax
+        ? item.summary.slice(0, summaryMax - 1) + "…"
+        : item.summary;
+
+      lines.push(`  ${cursor} ${bugIdStr}  ${badges}  ${color.blackBright(summary)}`);
+
+      // Expanded detail for the selected item
+      if (isSelected) {
+        const hostname = safeHostname(item.url);
+        lines.push(`    ${color.blackBright(`↳ ${hostname} · #${item.bugId}`)}`);
+
+        // Word-wrap reason; indent = 6 visible chars ("      ")
+        const wrapWidth = Math.max(20, cols - 6);
+        for (const reasonLine of wordWrap(item.reason, wrapWidth)) {
+          lines.push(`      ${reasonLine}`);
+        }
+        lines.push("");
+      }
+    }
 
     this._pendingBox.setContent(lines.join("\n"));
+    this._pendingBox.scrollTo(selectedLine);
     this._screen.render();
   }
 
@@ -199,11 +236,56 @@ export class Tui {
 }
 
 /** @param {PendingBugUpdate["updates"]} updates */
+function formatUpdateBadges(updates) {
+  const parts = [];
+  if (updates.type)        parts.push(color.cyan(`[${updates.type}]`));
+  if (updates.priority)    parts.push(color.yellow(`[${updates.priority}]`));
+  if (updates.severity)    parts.push(color.xterm(167)(`[${updates.severity}]`));
+  if (updates.assigned_to) parts.push(color.blackBright(`[@${updates.assigned_to.split("@")[0]}]`));
+  return parts.join(" ");
+}
+
+/** @param {PendingBugUpdate["updates"]} updates */
 function formatUpdatesSummary(updates) {
   const parts = [];
-  if (updates.type) parts.push(`type → ${updates.type}`);
-  if (updates.priority) parts.push(`priority → ${updates.priority}`);
-  if (updates.severity) parts.push(`severity → ${updates.severity}`);
+  if (updates.type)        parts.push(`type → ${updates.type}`);
+  if (updates.priority)    parts.push(`priority → ${updates.priority}`);
+  if (updates.severity)    parts.push(`severity → ${updates.severity}`);
   if (updates.assigned_to) parts.push(`assigned_to → ${updates.assigned_to}`);
   return parts.join(", ") || "(no changes)";
+}
+
+/** @param {string} str */
+function stripAnsi(str) {
+  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+}
+
+/** @param {string} url */
+function safeHostname(url) {
+  try { return new URL(url).hostname; }
+  catch { return url; }
+}
+
+/**
+ * @param {string} text
+ * @param {number} width
+ * @returns {string[]}
+ */
+function wordWrap(text, width) {
+  const words = text.split(" ");
+  /** @type {string[]} */
+  const lines = [];
+  let current = "";
+  for (const word of words) {
+    if (!current) {
+      current = word;
+    } else if (current.length + 1 + word.length <= width) {
+      current += " " + word;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length > 0 ? lines : [""];
 }
