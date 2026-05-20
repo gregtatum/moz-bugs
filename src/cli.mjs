@@ -3,8 +3,8 @@ import { createInterface } from "node:readline/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "url";
 import color from "cli-color";
-import { runComponentBugs, fuzzyMatch } from "./bugzilla.mjs";
-import { closestMatch, levenshtein } from "./utils.mjs";
+import { runComponentBugs } from "./bugzilla.mjs";
+import { closestMatch } from "./utils.mjs";
 import { runTriage } from "./triage.mjs";
 import {
   addComponentConfig,
@@ -15,18 +15,15 @@ import {
   normalizeBugzillaUrl,
   DEFAULT_BUGZILLA_URL,
 } from "./store.mjs";
-
-const VALID_PRIORITIES = new Set(["P1", "P2", "P3", "P4", "P5"]);
-const VALID_SEVERITIES = new Set(["S1", "S2", "S3", "S4"]);
-const SORT_FIELDS = [
-  "id",
-  "creation_time",
-  "last_change_time",
-  "priority",
-  "severity",
-  "assigned_to",
-  "summary",
-];
+import {
+  resolveComponentQuery,
+  normalizePFilter,
+  normalizeSFilter,
+  resolveSortField,
+  VALID_PRIORITIES,
+  VALID_SEVERITIES,
+  SORT_FIELDS,
+} from "./query.mjs";
 
 export async function main(argv = process.argv) {
   const [command, ...args] = argv.slice(2);
@@ -95,6 +92,15 @@ export async function main(argv = process.argv) {
         await runFile(args);
         break;
       }
+      case "mcp": {
+        if (args.includes("--help") || args.includes("-h")) {
+          printMcpHelp();
+          break;
+        }
+        const { runMcpServer } = await import("./mcp.mjs");
+        await runMcpServer();
+        break;
+      }
       case "triage": {
         if (args.includes("--help") || args.includes("-h")) {
           printTriageHelp();
@@ -120,6 +126,7 @@ export async function main(argv = process.argv) {
           "component",
           "triage",
           "file",
+          "mcp",
         ]);
         const msg = suggestion
           ? `Unknown command "${command}", did you mean "${suggestion}"?`
@@ -138,49 +145,6 @@ export async function main(argv = process.argv) {
   }
 }
 
-/**
- * Resolves a component query to matching ComponentConfig objects.
- * A query containing "::" is treated as "Product :: Component" and looked up
- * directly. Otherwise fuzzy search runs first, with Levenshtein as a fallback.
- *
- * @param {string} query
- * @param {import("./types.d.ts").ComponentConfig[]} savedComponents
- * @returns {import("./types.d.ts").ComponentConfig[]}
- */
-function resolveComponentQuery(query, savedComponents) {
-  if (query.includes("::")) {
-    const separatorIndex = query.indexOf("::");
-    const product = query.slice(0, separatorIndex).trim();
-    const component = query.slice(separatorIndex + 2).trim();
-    const matchingConfig = savedComponents.find(
-      (c) => c.product.toLowerCase() === product.toLowerCase(),
-    );
-    const url = matchingConfig?.url ?? DEFAULT_BUGZILLA_URL;
-    return [{ product, component, url }];
-  }
-
-  const fuzzyMatches = savedComponents.filter((c) =>
-    fuzzyMatch(query, `${c.product} ${c.component}`),
-  );
-
-  if (fuzzyMatches.length > 0) {
-    return fuzzyMatches;
-  }
-
-  // Levenshtein fallback: pick the closest saved component
-  let closest = null;
-  let closestDist = Infinity;
-
-  for (const c of savedComponents) {
-    const dist = levenshtein(query, `${c.product} ${c.component}`);
-    if (dist < closestDist) {
-      closestDist = dist;
-      closest = c;
-    }
-  }
-
-  return closest ? [closest] : [];
-}
 
 /**
  * @param {import("./types.d.ts").BugFilters} [filters]
@@ -466,33 +430,6 @@ function parseListFilters(args) {
   return filters;
 }
 
-/**
- * @param {string} input
- * @returns {string}
- */
-function resolveSortField(input) {
-  const s = input.toLowerCase().trim();
-  let best = SORT_FIELDS[0];
-  let bestDist = Infinity;
-  for (const field of SORT_FIELDS) {
-    const dist = levenshtein(s, field);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = field;
-    }
-  }
-  return best;
-}
-
-/** @param {string} v */
-function normalizePFilter(v) {
-  return `P${v.toUpperCase().replace(/^P/, "")}`;
-}
-
-/** @param {string} v */
-function normalizeSFilter(v) {
-  return `S${v.toUpperCase().replace(/^S/, "")}`;
-}
 
 // NOTE: Keep in sync with the README.md.
 function printHelp() {
@@ -505,6 +442,7 @@ Commands:
   file            Open a browser to file a new bug
   component       Save or remove a Bugzilla product/component to track
   triage          Interactively assign priority/severity to un-triaged bugs
+  mcp             Start an MCP server exposing bugs as AI-accessible tools
 
 Options:
   -h, --help      Show help
@@ -575,6 +513,35 @@ Arguments:
 Options:
   -d, --delete    Remove the component instead of adding it
   -h, --help      Show this help
+`.trim(),
+  );
+}
+
+// NOTE: Keep in sync with the README.md.
+function printMcpHelp() {
+  console.log(
+    `
+Usage: moz-bugs mcp
+
+Start an MCP (Model Context Protocol) server that exposes your saved
+Bugzilla components as AI-accessible tools.
+
+The server communicates via stdio and logs to ~/.moz-bugs-mcp.log.
+Use \`tail -f ~/.moz-bugs-mcp.log\` to monitor activity.
+
+Tools exposed (read-only):
+  list_bugs         List open bugs with optional filters:
+                      component, assigned, priority, severity, sort, active
+  list_components   List saved component configurations
+
+To add to Claude Desktop, edit:
+  ~/Library/Application Support/Claude/claude_desktop_config.json
+
+To add to Claude Code:
+  claude mcp add moz-bugs -- moz-bugs mcp
+
+Options:
+  -h, --help        Show this help
 `.trim(),
   );
 }

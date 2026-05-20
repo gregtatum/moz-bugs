@@ -27,6 +27,7 @@
     "bin"
   ],
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "cli-color": "^1.4.0"
   },
   "devDependencies": {

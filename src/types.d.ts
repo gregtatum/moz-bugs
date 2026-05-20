@@ -43,6 +43,16 @@ export type BugFilters = {
   active?: boolean;
 };
 
+export type ComponentBugsData = {
+  product: string;
+  component: string;
+  url: string;
+  totalFetched: number;
+  bugs: Bug[];
+  active?: Bug[];
+  stale?: Bug[];
+};
+
 export type BugComment = {
   text: string;
   count: number;

@@ -4,6 +4,7 @@ import color from "cli-color";
 /** @typedef {import("./types.d.ts").Bug} Bug */
 /** @typedef {import("./types.d.ts").BugSearchResponse} BugSearchResponse */
 /** @typedef {import("./types.d.ts").BugFilters} BugFilters */
+/** @typedef {import("./types.d.ts").ComponentBugsData} ComponentBugsData */
 
 /**
  * @param {string} query
@@ -76,13 +77,16 @@ function makeBugComparator(fields) {
 }
 
 /**
+ * Returns structured bug data for a single product/component without printing.
+ *
  * @param {string} product
  * @param {string} component
  * @param {string} url
  * @param {string | undefined} apiKey
  * @param {BugFilters} [filters]
+ * @returns {Promise<ComponentBugsData>}
  */
-export async function runComponentBugs(product, component, url, apiKey, filters = {}) {
+export async function getComponentBugs(product, component, url, apiKey, filters = {}) {
   const params = new URLSearchParams({
     product,
     component,
@@ -91,19 +95,13 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   });
 
   const endpoint = new URL(`/rest/bug?${params}`, url);
-  const bugs = await fetchBugs(endpoint, url, apiKey);
-
-  printHeader(product, component, url, bugs.length, filters);
-
-  if (bugs.length === 0) {
-    console.log(color.blackBright("  (no open bugs)"));
-    return;
-  }
+  const allBugs = await fetchBugs(endpoint, url, apiKey);
+  const totalFetched = allBugs.length;
 
   if (filters.active) {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const assigned = bugs
+    const assigned = allBugs
       .filter((bug) => bug.assigned_to !== NOBODY)
       .filter((bug) => matchesBugFilter(bug, filters));
 
@@ -117,6 +115,95 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     const stale = assigned
       .filter((bug) => (bug.last_change_time ?? "") < cutoff)
       .sort(byRecency);
+
+    return { product, component, url, totalFetched, bugs: [...active, ...stale], active, stale };
+  }
+
+  const requestedSortFields = filters.sort ?? [];
+  const comparator = makeBugComparator(
+    requestedSortFields.includes("summary")
+      ? requestedSortFields
+      : [...requestedSortFields, "summary"]
+  );
+  const sorted = [...allBugs].sort(comparator);
+
+  if (requestedSortFields.length > 0) {
+    const bugs = sorted.filter((bug) => matchesBugFilter(bug, filters));
+    return { product, component, url, totalFetched, bugs };
+  }
+
+  // Default view: batch-fetch children of meta bugs and build a flat list
+  // ordered as: meta bug followed by its visible children, non-meta bugs inline.
+  const metaChildIds = new Set(
+    sorted
+      .filter((bug) => bug.summary.toLowerCase().includes("[meta]"))
+      .flatMap((bug) => bug.depends_on ?? [])
+  );
+
+  /** @type {Map<number, Bug>} */
+  const childMap = new Map();
+  if (metaChildIds.size > 0) {
+    const childParams = new URLSearchParams({
+      include_fields: "id,summary,type,priority,severity,assigned_to,assigned_to_detail,groups,last_change_time",
+      resolution: "---",
+    });
+    for (const id of metaChildIds) {
+      childParams.append("id", String(id));
+    }
+    const fetchedChildren = await fetchBugs(new URL(`/rest/bug?${childParams}`, url), url, apiKey);
+    for (const child of fetchedChildren) {
+      childMap.set(child.id, child);
+    }
+  }
+
+  const hasFilter = Boolean(filters.assigned || filters.priority || filters.severity);
+
+  /** @type {Bug[]} */
+  const bugs = [];
+  for (const bug of sorted.filter((bug) => !metaChildIds.has(bug.id))) {
+    const isMeta = bug.summary.toLowerCase().includes("[meta]");
+
+    if (!isMeta) {
+      if (!matchesBugFilter(bug, filters)) continue;
+      bugs.push(bug);
+    } else {
+      const children = (bug.depends_on ?? [])
+        .flatMap((id) => {
+          const child = childMap.get(id);
+          return child ? [child] : [];
+        })
+        .filter((child) => matchesBugFilter(child, filters))
+        .sort(comparator);
+
+      if (hasFilter && children.length === 0) continue;
+
+      bugs.push(bug, ...children);
+    }
+  }
+
+  return { product, component, url, totalFetched, bugs };
+}
+
+/**
+ * @param {string} product
+ * @param {string} component
+ * @param {string} url
+ * @param {string | undefined} apiKey
+ * @param {BugFilters} [filters]
+ */
+export async function runComponentBugs(product, component, url, apiKey, filters = {}) {
+  const data = await getComponentBugs(product, component, url, apiKey, filters);
+
+  printHeader(product, component, url, data.totalFetched, filters);
+
+  if (data.totalFetched === 0) {
+    console.log(color.blackBright("  (no open bugs)"));
+    return;
+  }
+
+  if (filters.active) {
+    const active = data.active ?? [];
+    const stale = data.stale ?? [];
 
     if (active.length === 0 && stale.length === 0) {
       console.log(color.blackBright("  (no assigned bugs)"));
@@ -143,71 +230,44 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   }
 
   const requestedSortFields = filters.sort ?? [];
-  const comparator = makeBugComparator(
-    requestedSortFields.includes("summary")
-      ? requestedSortFields
-      : [...requestedSortFields, "summary"]
-  );
-  const sorted = [...bugs].sort(comparator);
+  const widths = computeColumnWidths(data.bugs);
 
-  // When an explicit sort order is requested, render bugs as a flat list so
-  // the sort order is unambiguous rather than being broken up by meta-bug trees.
   if (requestedSortFields.length > 0) {
-    const visible = sorted.filter((bug) => matchesBugFilter(bug, filters));
-    const widths = computeColumnWidths(visible);
-    for (const bug of visible) {
+    for (const bug of data.bugs) {
       printBugLine(bug, url, "", widths);
     }
     return;
   }
 
-  // Default view: batch-fetch children of meta bugs and render as indented trees.
+  // Default view: render meta bugs as indented trees. The bugs array from
+  // getComponentBugs already has children immediately following their parent,
+  // but we need to know which bugs are children to render tree chars.
   const metaChildIds = new Set(
-    sorted
+    data.bugs
       .filter((bug) => bug.summary.toLowerCase().includes("[meta]"))
       .flatMap((bug) => bug.depends_on ?? [])
   );
 
-  /** @type {Map<number, Bug>} */
-  const childMap = new Map();
-  if (metaChildIds.size > 0) {
-    const childParams = new URLSearchParams({
-      include_fields: "id,summary,type,priority,severity,assigned_to,assigned_to_detail,groups,last_change_time",
-      resolution: "---",
-    });
-    for (const id of metaChildIds) {
-      childParams.append("id", String(id));
-    }
-    const fetchedChildren = await fetchBugs(new URL(`/rest/bug?${childParams}`, url), url, apiKey);
-    for (const child of fetchedChildren) {
-      childMap.set(child.id, child);
-    }
-  }
-
-  const hasFilter = Boolean(filters.assigned || filters.priority || filters.severity);
-  const widths = computeColumnWidths([...sorted, ...Array.from(childMap.values())]);
-
-  for (const bug of sorted.filter((bug) => !metaChildIds.has(bug.id))) {
+  let i = 0;
+  while (i < data.bugs.length) {
+    const bug = data.bugs[i];
     const isMeta = bug.summary.toLowerCase().includes("[meta]");
 
     if (!isMeta) {
-      if (!matchesBugFilter(bug, filters)) continue;
       printBugLine(bug, url, "", widths);
+      i++;
     } else {
-      const children = (bug.depends_on ?? [])
-        .flatMap((id) => {
-          const child = childMap.get(id);
-          return child ? [child] : [];
-        })
-        .filter((child) => matchesBugFilter(child, filters))
-        .sort(comparator);
-
-      if (hasFilter && children.length === 0) continue;
-
       printBugLine(bug, url, "", widths);
-      for (let i = 0; i < children.length; i++) {
-        const isLast = i === children.length - 1;
-        printBugLine(children[i], url, isLast ? "└─ " : "├─ ", widths);
+      i++;
+      // collect the children that follow (they are the ones in metaChildIds)
+      const childStart = i;
+      while (i < data.bugs.length && metaChildIds.has(data.bugs[i].id)) {
+        i++;
+      }
+      const children = data.bugs.slice(childStart, i);
+      for (let j = 0; j < children.length; j++) {
+        const isLast = j === children.length - 1;
+        printBugLine(children[j], url, isLast ? "└─ " : "├─ ", widths);
       }
       if (children.length > 0) console.log("");
     }
