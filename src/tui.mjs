@@ -161,7 +161,12 @@ export class Tui {
     const pending = this._pendingItems();
 
     if (pending.length === 0) {
-      this._pendingBox.setContent("  Waiting for AI proposals...\n\n  [q]uit");
+      this._pendingBox.setContent(
+        "  When the AI proposes a bug update (via propose_bug_update), it appears here\n" +
+        "  for your review before anything is written to Bugzilla. You approve or deny\n" +
+        "  each proposal with [a] / [d]. No writes happen without your confirmation.\n\n" +
+        "  [q]uit"
+      );
       this._screen.render();
       return;
     }
