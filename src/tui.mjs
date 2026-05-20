@@ -201,6 +201,7 @@ export class Tui {
 /** @param {PendingBugUpdate["updates"]} updates */
 function formatUpdatesSummary(updates) {
   const parts = [];
+  if (updates.type) parts.push(`type → ${updates.type}`);
   if (updates.priority) parts.push(`priority → ${updates.priority}`);
   if (updates.severity) parts.push(`severity → ${updates.severity}`);
   if (updates.assigned_to) parts.push(`assigned_to → ${updates.assigned_to}`);

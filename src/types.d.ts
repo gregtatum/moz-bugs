@@ -63,6 +63,7 @@ export type PendingBugUpdate = {
   updates: {
     priority?: string;
     severity?: string;
+    type?: string;
     assigned_to?: string;
   };
   status: UpdateStatus;

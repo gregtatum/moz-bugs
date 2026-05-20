@@ -92,9 +92,11 @@ const TOOL_DEFINITIONS = [
   {
     name: "list_triage_bugs",
     description:
-      "List open bugs that need triage: bugs with no priority set (--), or defect bugs with " +
-      "no severity set (--). Meta bugs (containing '[meta]' in summary) are excluded. " +
-      "Returns the same structured bug objects as list_bugs.",
+      "List open bugs that need triage. A bug needs triage if: its priority is '--' (any type), " +
+      "OR it is a defect with severity '--'. Severity is only relevant for defects — tasks and " +
+      "enhancements do not have a severity requirement. Meta bugs (summary contains '[meta]') are " +
+      "excluded. Returns structured bug objects including the 'type' field (defect/enhancement/task) " +
+      "which is essential for determining what triage fields apply.",
     annotations: { readOnlyHint: true, destructiveHint: false },
     inputSchema: {
       type: "object",
@@ -113,6 +115,8 @@ const TOOL_DEFINITIONS = [
     description:
       "Propose a field update for a bug. The update is queued in the terminal for the user to " +
       "approve or deny — it is NOT written to Bugzilla immediately. " +
+      "Supported fields: priority (all bug types), severity (defects only), type, assigned_to. " +
+      "Do NOT set severity on enhancements or tasks — severity only applies to defects. " +
       "Returns { queued: true, updateId } on success. " +
       "Use list_pending_updates to check whether the user has approved or denied proposals. " +
       `Priority levels: ${PRIORITY_DESCRIPTIONS}. ` +
@@ -137,7 +141,12 @@ const TOOL_DEFINITIONS = [
             severity: {
               type: "string",
               enum: ["S1", "S2", "S3", "S4"],
-              description: SEVERITY_DESCRIPTIONS,
+              description: "Defects only — do not set on enhancements or tasks. " + SEVERITY_DESCRIPTIONS,
+            },
+            type: {
+              type: "string",
+              enum: ["defect", "enhancement", "task"],
+              description: "Bug type: defect (a bug/regression), enhancement (new feature request), task (work item).",
             },
             assigned_to: {
               type: "string",
@@ -160,8 +169,10 @@ const TOOL_DEFINITIONS = [
   {
     name: "get_bug",
     description:
-      "Fetch full details for a single bug including its description (first comment). " +
-      "Returns all standard fields plus a 'description' field with the bug's original text.",
+      "Fetch full details for a single bug including its description (first comment/STR). " +
+      "Returns all standard fields — including 'type' (defect/enhancement/task), priority, " +
+      "severity, assigned_to, creator — plus a 'description' field with the bug's original text. " +
+      "Call this before proposing updates when you need the full context.",
     annotations: { readOnlyHint: true, destructiveHint: false },
     inputSchema: {
       type: "object",
@@ -353,6 +364,13 @@ function handleProposeBugUpdate(args, tui) {
     validatedUpdates.severity = u.severity;
   }
 
+  if (u.type !== undefined) {
+    if (!["defect", "enhancement", "task"].includes(String(u.type))) {
+      return { content: [{ type: "text", text: `Invalid type: ${u.type}. Must be defect, enhancement, or task.` }], isError: true };
+    }
+    validatedUpdates.type = String(u.type);
+  }
+
   if (u.assigned_to !== undefined) {
     if (typeof u.assigned_to !== "string" || !u.assigned_to.includes("@")) {
       return { content: [{ type: "text", text: `Invalid assigned_to: must be an email address.` }], isError: true };
@@ -361,7 +379,7 @@ function handleProposeBugUpdate(args, tui) {
   }
 
   if (Object.keys(validatedUpdates).length === 0) {
-    return { content: [{ type: "text", text: "updates must contain at least one of: priority, severity, assigned_to." }], isError: true };
+    return { content: [{ type: "text", text: "updates must contain at least one of: priority, severity, type, assigned_to." }], isError: true };
   }
 
   const updateId = randomUUID();
@@ -474,16 +492,20 @@ ${componentList}
 
 Available tools:
 - list_bugs: Fetch open bugs for saved components. Filters: component, assigned, priority, severity, sort, active.
-- list_triage_bugs: Fetch bugs needing triage (missing priority or severity). Filter: component.
-- get_bug: Fetch full details for a single bug including its description (first comment/STR).
-- propose_bug_update: Queue a field update (priority, severity, assigned_to) for user approval.
-  The user must approve updates in the terminal — writes are never automatic.
-  After proposing, use list_pending_updates to check whether the user approved or denied.
-- list_pending_updates: Check the status of all proposed updates (pending/approved/denied/failed).
+- list_triage_bugs: Fetch bugs needing triage. Returns bugs where priority is '--' (any type),
+  or where the bug is a defect with severity '--'. Always check the 'type' field on each returned
+  bug — severity triage only applies to defects.
+- get_bug: Fetch a single bug with its full description/STR. Always includes 'type' field.
+  Use this before proposing updates when you need full context.
+- propose_bug_update: Queue a field update for user approval (never writes immediately).
+  Supported fields: priority (all types), severity (defects only), type, assigned_to.
+  Do NOT propose severity for enhancements or tasks.
+- list_pending_updates: Check status of all proposed updates (pending/approved/denied/failed).
 - list_components: List the saved component configurations.
 
+Bug types: defect (bug/regression), enhancement (new feature), task (work item).
 Priority levels: ${PRIORITY_DESCRIPTIONS}
-Severity levels: ${SEVERITY_DESCRIPTIONS}
+Severity applies to DEFECTS ONLY: ${SEVERITY_DESCRIPTIONS}
 
 This server requires user approval for all writes. Read operations are immediate.`,
     },
