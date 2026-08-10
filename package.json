@@ -1,6 +1,6 @@
 {
   "name": "moz-bugs",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "CLI utilities for managing team work across Bugzilla and Jira.",
   "repository": {
     "type": "git",
