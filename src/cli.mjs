@@ -461,6 +461,10 @@ function parseListFilters(args) {
       case "--active":
         filters.active = true;
         break;
+      case "--confidential":
+      case "--security":
+        filters.confidential = true;
+        break;
     }
   }
   return filters;
@@ -553,6 +557,7 @@ Options:
       --active              Show Active / Stale sections by assignee activity.
                             Active = assigned + touched within 30 days;
                             Stale = assigned + no activity for 30+ days.
+      --confidential        Show only confidential or security bugs.
   -h, --help                Show this help
 `.trim(),
   );

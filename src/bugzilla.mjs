@@ -28,6 +28,7 @@ function matchesBugFilter(bug, filters) {
   if (filters.assigned && !fuzzyMatch(filters.assigned, bug.assigned_to)) return false;
   if (filters.priority && bug.priority !== filters.priority) return false;
   if (filters.severity && bug.severity !== filters.severity) return false;
+  if (filters.confidential && (bug.groups?.length ?? 0) === 0) return false;
   return true;
 }
 
@@ -184,7 +185,9 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     }
   }
 
-  const hasFilter = Boolean(filters.assigned || filters.priority || filters.severity);
+  const hasFilter = Boolean(
+    filters.assigned || filters.priority || filters.severity || filters.confidential,
+  );
   const widths = computeColumnWidths([...sorted, ...Array.from(childMap.values())]);
 
   for (const bug of sorted.filter((bug) => !metaChildIds.has(bug.id))) {
@@ -202,7 +205,12 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
         .filter((child) => matchesBugFilter(child, filters))
         .sort(comparator);
 
-      if (hasFilter && children.length === 0) continue;
+      // Hide a meta bug when a filter is active and neither the meta bug
+      // itself nor any of its children match (e.g. a non-confidential meta
+      // with no confidential children under --confidential).
+      if (hasFilter && !matchesBugFilter(bug, filters) && children.length === 0) {
+        continue;
+      }
 
       printBugLine(bug, url, "", widths);
       for (let i = 0; i < children.length; i++) {

@@ -73,6 +73,7 @@ moz-bugs list [options]
 | `-v, --severity <value>` | Filter by severity (e.g. `s1`, `S2`, `3`) |
 | `-s, --sort <fields>` | Comma-separated sort fields, fuzzy-matched (e.g. `--sort priority,creation`) |
 | `--active` | Show two sections: **Active** (assigned, touched within 30 days) and **Stale** (assigned, no activity for 30+ days). Excludes bugs assigned to nobody. |
+| `--confidential` | Show only confidential bugs (restricted to a security group, shown in red). Alias: `--security` |
 
 Valid sort fields: `id`, `creation_time`, `last_change_time`, `priority`, `severity`, `assigned_to`, `summary`. Summary is always appended as the final tiebreaker.
 

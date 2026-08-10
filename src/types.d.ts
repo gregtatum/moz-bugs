@@ -41,6 +41,7 @@ export type BugFilters = {
   severity?: string;
   sort?: string[];
   active?: boolean;
+  confidential?: boolean;
 };
 
 export type BugComment = {
