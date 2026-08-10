@@ -337,7 +337,11 @@ function computeColumnWidths(bugs) {
 export function printBugLine(bug, url, treeChar, widths = {}) {
   const { assigneeWidth = 0, daysWidth = 0 } = widths;
   const bugUrl = `${url}/show_bug.cgi?id=${bug.id}`;
-  const link = `\x1b]8;;${bugUrl}\x1b\\${color.green(`${bug.id}`)}\x1b]8;;\x1b\\`;
+  // Give each hyperlink an explicit, unique id= so terminals treat it as a
+  // self-contained link. Without it they fall back to heuristics that
+  // mis-associate cells around soft-wrapped lines, dropping the link on the
+  // bug id that follows a wrapped summary.
+  const link = `\x1b]8;id=bug-${bug.id};${bugUrl}\x1b\\${color.green(`${bug.id}`)}\x1b]8;;\x1b\\`;
   const isDefect = bug.type === "defect";
   const severityBadge = isDefect ? formatSeverityBadge(bug.severity) : null;
   const badge = severityBadge ?? formatType(bug.type);
