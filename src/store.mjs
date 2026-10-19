@@ -6,6 +6,8 @@ import path from "node:path";
 /** @typedef {import("./types.d.ts").Store} Store */
 /** @typedef {import("./types.d.ts").ComponentConfig} ComponentConfig */
 /** @typedef {import("./types.d.ts").BugzillaAuth} BugzillaAuth */
+/** @typedef {import("./types.d.ts").ProductComponent} ProductComponent */
+/** @typedef {import("./types.d.ts").ProductCache} ProductCache */
 
 export const DEFAULT_BUGZILLA_URL = "https://bugzilla.mozilla.org";
 
@@ -15,6 +17,80 @@ function resolveStoragePath() {
     return path.resolve(override);
   }
   return path.join(os.homedir(), ".moz-bugs.json");
+}
+
+/**
+ * The product list runs to tens of thousands of entries, so it lives beside
+ * the store rather than inside it — the store is small enough to hand-edit.
+ * @returns {string}
+ */
+function resolveProductCachePath() {
+  const storagePath = resolveStoragePath();
+  const dir = path.dirname(storagePath);
+  const base = path.basename(storagePath).replace(/\.json$/, "");
+  return path.join(dir, `${base}-products.json`);
+}
+
+const PRODUCT_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Read the cached product list for a Bugzilla instance, or null when it is
+ * missing, unreadable, or older than a week.
+ *
+ * @param {string} url
+ * @returns {ProductComponent[] | null}
+ */
+export function getCachedProductComponents(url) {
+  const normalizedUrl = normalizeBugzillaUrl(url);
+  const cachePath = resolveProductCachePath();
+  if (!fs.existsSync(cachePath)) {
+    return null;
+  }
+  try {
+    /** @type {ProductCache[]} */
+    const entries = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+    const entry = entries.find((e) => e.url === normalizedUrl);
+    if (!entry || !Array.isArray(entry.pairs) || entry.pairs.length === 0) {
+      return null;
+    }
+    const age = Date.now() - new Date(entry.fetchedAt).getTime();
+    if (!Number.isFinite(age) || age > PRODUCT_CACHE_MAX_AGE_MS) {
+      return null;
+    }
+    return entry.pairs;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string} url
+ * @param {ProductComponent[]} pairs
+ */
+export function setCachedProductComponents(url, pairs) {
+  const normalizedUrl = normalizeBugzillaUrl(url);
+  const cachePath = resolveProductCachePath();
+  /** @type {ProductCache[]} */
+  let entries = [];
+  if (fs.existsSync(cachePath)) {
+    try {
+      entries = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+      if (!Array.isArray(entries)) entries = [];
+    } catch {
+      entries = [];
+    }
+  }
+  const next = entries.filter((e) => e.url !== normalizedUrl);
+  next.push({
+    url: normalizedUrl,
+    fetchedAt: new Date().toISOString(),
+    pairs,
+  });
+  // A stale list only costs a redundant fetch, so a failed write is not worth
+  // interrupting the command the user actually asked for.
+  try {
+    fs.writeFileSync(cachePath, `${JSON.stringify(next)}\n`, "utf8");
+  } catch {}
 }
 
 /** @type {Store | null} */

@@ -4,6 +4,7 @@ import color from "cli-color";
 /** @typedef {import("./types.d.ts").Bug} Bug */
 /** @typedef {import("./types.d.ts").BugSearchResponse} BugSearchResponse */
 /** @typedef {import("./types.d.ts").BugFilters} BugFilters */
+/** @typedef {import("./types.d.ts").ProductComponent} ProductComponent */
 
 /**
  * @param {string} query
@@ -25,7 +26,8 @@ export function fuzzyMatch(query, target) {
  * @param {BugFilters} filters
  */
 function matchesBugFilter(bug, filters) {
-  if (filters.assigned && !fuzzyMatch(filters.assigned, bug.assigned_to)) return false;
+  if (filters.assigned && !fuzzyMatch(filters.assigned, bug.assigned_to))
+    return false;
   if (filters.priority && bug.priority !== filters.priority) return false;
   if (filters.severity && bug.severity !== filters.severity) return false;
   if (filters.confidential && (bug.groups?.length ?? 0) === 0) return false;
@@ -55,13 +57,19 @@ function makeBugComparator(fields) {
           delta = (a.creation_time ?? "").localeCompare(b.creation_time ?? "");
           break;
         case "last_change_time":
-          delta = (a.last_change_time ?? "").localeCompare(b.last_change_time ?? "");
+          delta = (a.last_change_time ?? "").localeCompare(
+            b.last_change_time ?? "",
+          );
           break;
         case "priority":
-          delta = (PRIORITY_ORDER[a.priority] ?? 99) - (PRIORITY_ORDER[b.priority] ?? 99);
+          delta =
+            (PRIORITY_ORDER[a.priority] ?? 99) -
+            (PRIORITY_ORDER[b.priority] ?? 99);
           break;
         case "severity":
-          delta = (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99);
+          delta =
+            (SEVERITY_ORDER[a.severity] ?? 99) -
+            (SEVERITY_ORDER[b.severity] ?? 99);
           break;
         case "assigned_to":
           delta = a.assigned_to.localeCompare(b.assigned_to);
@@ -83,12 +91,19 @@ function makeBugComparator(fields) {
  * @param {string | undefined} apiKey
  * @param {BugFilters} [filters]
  */
-export async function runComponentBugs(product, component, url, apiKey, filters = {}) {
+export async function runComponentBugs(
+  product,
+  component,
+  url,
+  apiKey,
+  filters = {},
+) {
   const params = new URLSearchParams({
     product,
     component,
     resolution: "---",
-    include_fields: "id,summary,status,assigned_to,assigned_to_detail,priority,severity,type,depends_on,groups,creation_time,last_change_time",
+    include_fields:
+      "id,summary,status,assigned_to,assigned_to_detail,priority,severity,type,depends_on,groups,creation_time,last_change_time",
   });
 
   const endpoint = new URL(`/rest/bug?${params}`, url);
@@ -102,7 +117,9 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   }
 
   if (filters.active) {
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const cutoff = new Date(
+      Date.now() - 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
 
     const assigned = bugs
       .filter((bug) => bug.assigned_to !== NOBODY)
@@ -147,7 +164,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   const comparator = makeBugComparator(
     requestedSortFields.includes("summary")
       ? requestedSortFields
-      : [...requestedSortFields, "summary"]
+      : [...requestedSortFields, "summary"],
   );
   const sorted = [...bugs].sort(comparator);
 
@@ -170,7 +187,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   const metaChildIds = new Set(
     sorted
       .filter((bug) => bug.summary.toLowerCase().includes("[meta]"))
-      .flatMap((bug) => bug.depends_on ?? [])
+      .flatMap((bug) => bug.depends_on ?? []),
   );
 
   /** @type {Map<number, Bug>} */
@@ -179,7 +196,8 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     const fetchedChildren = await fetchBugsByIds(
       Array.from(metaChildIds),
       {
-        include_fields: "id,summary,type,priority,severity,assigned_to,assigned_to_detail,groups,last_change_time",
+        include_fields:
+          "id,summary,type,priority,severity,assigned_to,assigned_to_detail,groups,last_change_time",
         resolution: "---",
       },
       url,
@@ -191,9 +209,15 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   }
 
   const hasFilter = Boolean(
-    filters.assigned || filters.priority || filters.severity || filters.confidential,
+    filters.assigned ||
+    filters.priority ||
+    filters.severity ||
+    filters.confidential,
   );
-  const widths = computeColumnWidths([...sorted, ...Array.from(childMap.values())]);
+  const widths = computeColumnWidths([
+    ...sorted,
+    ...Array.from(childMap.values()),
+  ]);
   let printedAny = false;
 
   for (const bug of sorted.filter((bug) => !metaChildIds.has(bug.id))) {
@@ -215,7 +239,11 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
       // Hide a meta bug when a filter is active and neither the meta bug
       // itself nor any of its children match (e.g. a non-confidential meta
       // with no confidential children under --confidential).
-      if (hasFilter && !matchesBugFilter(bug, filters) && children.length === 0) {
+      if (
+        hasFilter &&
+        !matchesBugFilter(bug, filters) &&
+        children.length === 0
+      ) {
         continue;
       }
 
@@ -241,7 +269,9 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
 function printNoMatches(filters) {
   console.log(
     color.blackBright(
-      filters.confidential ? "  (no confidential bugs)" : "  (no matching bugs)",
+      filters.confidential
+        ? "  (no confidential bugs)"
+        : "  (no matching bugs)",
     ),
   );
 }
@@ -279,12 +309,14 @@ export async function fetchBugsByIds(ids, searchParams, url, apiKey) {
 }
 
 /**
+ * Perform a REST request and surface Bugzilla's own error envelope, which
+ * arrives with a 200 status rather than an HTTP error code.
+ *
  * @param {URL} endpoint
- * @param {string} url
  * @param {string | undefined} apiKey
- * @returns {Promise<Bug[]>}
+ * @returns {Promise<any>}
  */
-export async function fetchBugs(endpoint, url, apiKey) {
+async function fetchJson(endpoint, apiKey) {
   /** @type {HeadersInit} */
   const headers = { "Content-Type": "application/json" };
   if (apiKey) {
@@ -293,16 +325,65 @@ export async function fetchBugs(endpoint, url, apiKey) {
 
   const response = await fetch(endpoint, { headers });
   if (!response.ok) {
-    throw new Error(`Bugzilla request failed: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `Bugzilla request failed: ${response.status} ${response.statusText}`,
+    );
   }
 
-  /** @type {BugSearchResponse & { error?: { message?: string; messageText?: string } }} */
   const json = await response.json();
   if (json.error) {
     const err = json.error;
-    throw new Error(`Bugzilla error: ${err.message ?? err.messageText ?? JSON.stringify(err)}`);
+    throw new Error(
+      `Bugzilla error: ${err.message ?? err.messageText ?? JSON.stringify(err)}`,
+    );
   }
+  return json;
+}
+
+/**
+ * @param {URL} endpoint
+ * @param {string} url
+ * @param {string | undefined} apiKey
+ * @returns {Promise<Bug[]>}
+ */
+export async function fetchBugs(endpoint, url, apiKey) {
+  /** @type {BugSearchResponse} */
+  const json = await fetchJson(endpoint, apiKey);
   return json.bugs;
+}
+
+/**
+ * @param {string} url
+ * @param {string | undefined} apiKey
+ * @returns {Promise<ProductComponent[]>}
+ */
+export async function fetchProductComponents(url, apiKey) {
+  const params = new URLSearchParams({
+    type: "accessible",
+    // Without include_fields the response carries every version, milestone
+    // and flag type per product, which runs to several megabytes.
+    include_fields: "name,is_active,components.name,components.is_active",
+  });
+
+  /** @type {{ products?: Array<{ name: string, is_active?: boolean, components?: Array<{ name: string, is_active?: boolean }> }> }} */
+  const json = await fetchJson(new URL(`/rest/product?${params}`, url), apiKey);
+
+  /** @type {ProductComponent[]} */
+  const pairs = [];
+  for (const product of json.products ?? []) {
+    if (product.is_active === false) continue;
+    for (const component of product.components ?? []) {
+      if (component.is_active === false) continue;
+      pairs.push({ product: product.name, component: component.name });
+    }
+  }
+
+  pairs.sort(
+    (a, b) =>
+      a.product.localeCompare(b.product) ||
+      a.component.localeCompare(b.component),
+  );
+  return pairs;
 }
 
 /**
@@ -315,7 +396,11 @@ export async function fetchBugs(endpoint, url, apiKey) {
 function printHeader(product, component, url, bugCount, filters) {
   const p = encodeURIComponent(product);
   const c = encodeURIComponent(component);
-  const openParams = new URLSearchParams({ product, component, bug_status: "__open__" });
+  const openParams = new URLSearchParams({
+    product,
+    component,
+    bug_status: "__open__",
+  });
   if (filters?.confidential) {
     // Bugzilla has no "is confidential" field; a bug is restricted when it
     // belongs to at least one group.
@@ -329,17 +414,25 @@ function printHeader(product, component, url, bugCount, filters) {
     openParams.append("emailassigned_to1", "1");
     openParams.append("email1", filters.assigned);
   }
-  const openUrl  = `${url}/buglist.cgi?${openParams}`;
+  const openUrl = `${url}/buglist.cgi?${openParams}`;
   const fixedUrl = `${url}/buglist.cgi?product=${p}&component=${c}&chfield=resolution&chfieldfrom=-6m&chfieldvalue=FIXED&bug_status=__closed__`;
-  const fileUrl  = `${url}/enter_bug.cgi?product=${p}&component=${c}`;
+  const fileUrl = `${url}/enter_bug.cgi?product=${p}&component=${c}`;
 
   const scope = filters?.confidential ? "  ·  confidential only" : "";
-  const titleBar = color.bgCyan.black(` ${product} :: ${component}  ·  ${bugCount} open bug${bugCount !== 1 ? "s" : ""}${scope} `);
+  const titleBar = color.bgCyan.black(
+    ` ${product} :: ${component}  ·  ${bugCount} open bug${bugCount !== 1 ? "s" : ""}${scope} `,
+  );
 
   console.log(`\n  ${titleBar}`);
-  console.log(`  ${color.blackBright("├─")} ${termLink("See Open Bugs",  openUrl)}`);
-  console.log(`  ${color.blackBright("├─")} ${termLink("Recently Fixed", fixedUrl)}`);
-  console.log(`  ${color.blackBright("└─")} ${termLink("File New Bug",   fileUrl)}`);
+  console.log(
+    `  ${color.blackBright("├─")} ${termLink("See Open Bugs", openUrl)}`,
+  );
+  console.log(
+    `  ${color.blackBright("├─")} ${termLink("Recently Fixed", fixedUrl)}`,
+  );
+  console.log(
+    `  ${color.blackBright("└─")} ${termLink("File New Bug", fileUrl)}`,
+  );
   console.log("");
 }
 
@@ -357,7 +450,9 @@ function termLink(text, url) {
  * @param {Bug} bug
  */
 function formatAssignee(bug) {
-  const nickMatch = (bug.assigned_to_detail?.real_name ?? "").match(/\[:([^\]]+)\]/);
+  const nickMatch = (bug.assigned_to_detail?.real_name ?? "").match(
+    /\[:([^\]]+)\]/,
+  );
   if (nickMatch) return nickMatch[1];
   return bug.assigned_to.split("@")[0];
 }
@@ -385,7 +480,10 @@ export function computeColumnWidths(bugs) {
       assigneeWidth = Math.max(assigneeWidth, formatAssignee(bug).length);
     }
     if (bug.last_change_time) {
-      daysWidth = Math.max(daysWidth, formatDaysAgo(getDaysAgo(bug.last_change_time)).length);
+      daysWidth = Math.max(
+        daysWidth,
+        formatDaysAgo(getDaysAgo(bug.last_change_time)).length,
+      );
     }
   }
   return { assigneeWidth, daysWidth };
@@ -411,18 +509,25 @@ export function printBugLine(bug, url, treeChar, widths = {}) {
   const priority = formatPriority(bug.priority);
   const tree = treeChar ? color.blackBright(treeChar) : "";
 
-  const assigneeRaw = bug.assigned_to && bug.assigned_to !== NOBODY
-    ? formatAssignee(bug) : "";
-  const assigneeTrail = " ".repeat(Math.max(0, assigneeWidth - assigneeRaw.length));
-  const assigneeCol = (assigneeRaw ? color.cyan(assigneeRaw) : "") + assigneeTrail;
+  const assigneeRaw =
+    bug.assigned_to && bug.assigned_to !== NOBODY ? formatAssignee(bug) : "";
+  const assigneeTrail = " ".repeat(
+    Math.max(0, assigneeWidth - assigneeRaw.length),
+  );
+  const assigneeCol =
+    (assigneeRaw ? color.cyan(assigneeRaw) : "") + assigneeTrail;
 
-  const daysRaw = bug.last_change_time ? formatDaysAgo(getDaysAgo(bug.last_change_time)) : "";
+  const daysRaw = bug.last_change_time
+    ? formatDaysAgo(getDaysAgo(bug.last_change_time))
+    : "";
   const daysLead = " ".repeat(Math.max(0, daysWidth - daysRaw.length));
   const daysCol = daysLead + (daysRaw ? color.yellow(daysRaw) : "");
 
   const isRestricted = (bug.groups?.length ?? 0) > 0;
   const summary = isRestricted ? color.xterm(203)(bug.summary) : bug.summary;
-  console.log(`${link} ${badge} ${priority} ${assigneeCol} ${daysCol} ${tree}${summary}`);
+  console.log(
+    `${link} ${badge} ${priority} ${assigneeCol} ${daysCol} ${tree}${summary}`,
+  );
 }
 
 /**
@@ -437,10 +542,14 @@ function printSectionHeader(label, count) {
 /** @param {string} type */
 function formatType(type) {
   switch (type) {
-    case "defect": return color.bgRed.whiteBright(" def ");
-    case "task": return color.bgBlue.whiteBright(" tsk ");
-    case "enhancement": return color.bgGreen.black(" enh ");
-    default: return color.blackBright("     ");
+    case "defect":
+      return color.bgRed.whiteBright(" def ");
+    case "task":
+      return color.bgBlue.whiteBright(" tsk ");
+    case "enhancement":
+      return color.bgGreen.black(" enh ");
+    default:
+      return color.blackBright("     ");
   }
 }
 
@@ -452,23 +561,33 @@ function formatType(type) {
  */
 function formatSeverityBadge(severity) {
   switch (severity) {
-    case "S1": return color.bgYellow.black(" S1  ");
-    case "S2": return color.bgXterm(167).whiteBright(" S2  ");
-    case "S3": return color.bgXterm(131).whiteBright(" S3  ");
-    case "S4": return color.bgXterm(95).whiteBright(" S4  ");
-    default:   return null;
+    case "S1":
+      return color.bgYellow.black(" S1  ");
+    case "S2":
+      return color.bgXterm(167).whiteBright(" S2  ");
+    case "S3":
+      return color.bgXterm(131).whiteBright(" S3  ");
+    case "S4":
+      return color.bgXterm(95).whiteBright(" S4  ");
+    default:
+      return null;
   }
 }
 
 /** @param {string} priority */
 function formatPriority(priority) {
   switch (priority) {
-    case "P1": return color.bgYellow.black("P1");
-    case "P2": return color.yellow("P2");
-    case "P3": return color.xterm(136)("P3");
-    case "P4": return `\x1b]8;;https://firefox-source-docs.mozilla.org/bug-mgmt/guides/priority.html\x1b\\${color.red("P4")}\x1b]8;;\x1b\\`;
-    case "P5": return color.blackBright("P5");
-    default:   return color.blackBright("--");
+    case "P1":
+      return color.bgYellow.black("P1");
+    case "P2":
+      return color.yellow("P2");
+    case "P3":
+      return color.xterm(136)("P3");
+    case "P4":
+      return `\x1b]8;;https://firefox-source-docs.mozilla.org/bug-mgmt/guides/priority.html\x1b\\${color.red("P4")}\x1b]8;;\x1b\\`;
+    case "P5":
+      return color.blackBright("P5");
+    default:
+      return color.blackBright("--");
   }
 }
-

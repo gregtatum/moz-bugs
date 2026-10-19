@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- `track` opens an interactive picker when the component is omitted. The list
+  of products and components comes from the Bugzilla API (`/rest/product`),
+  is filtered as you type, and is cached for a week beside the config file.
+  `track <product>` narrows it to one product and `track --delete` picks from
+  the saved components instead.
 - `--confidential` flag (alias `--security`) for `track`, saving a component
   that only ever lists its confidential bugs. `list` and `triage` honor it, and
   re-running `track` without the flag goes back to listing every bug.
@@ -29,6 +34,11 @@
 ## v2.3.0 — 2026-08-10
 
 ### Added
+- `track` opens an interactive picker when the component is omitted. The list
+  of products and components comes from the Bugzilla API (`/rest/product`),
+  is filtered as you type, and is cached for a week beside the config file.
+  `track <product>` narrows it to one product and `track --delete` picks from
+  the saved components instead.
 - `--confidential` flag (alias `--security`) for `list`, showing only confidential
   bugs restricted to a security group. Meta bugs with no confidential children are
   hidden from the tree view.

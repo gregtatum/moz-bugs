@@ -10,6 +10,18 @@ export type ComponentConfig = {
   confidential?: boolean;
 };
 
+export type ProductComponent = {
+  product: string;
+  component: string;
+};
+
+/** Cached result of enumerating a Bugzilla instance's products. */
+export type ProductCache = {
+  url: string;
+  fetchedAt: string;
+  pairs: ProductComponent[];
+};
+
 export type BugzillaAuth = {
   url: string;
   apiKey: string;

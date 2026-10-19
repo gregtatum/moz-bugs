@@ -3,7 +3,12 @@ import { createInterface } from "node:readline/promises";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "url";
 import color from "cli-color";
-import { runComponentBugs, fuzzyMatch } from "./bugzilla.mjs";
+import {
+  runComponentBugs,
+  fuzzyMatch,
+  fetchProductComponents,
+} from "./bugzilla.mjs";
+import { selectFromOptions } from "./select.mjs";
 import { closestMatch, levenshtein } from "./utils.mjs";
 import { runTriage, listTriage } from "./triage.mjs";
 import {
@@ -13,6 +18,8 @@ import {
   getBugzillaAuth,
   setBugzillaAuth,
   normalizeBugzillaUrl,
+  getCachedProductComponents,
+  setCachedProductComponents,
   DEFAULT_BUGZILLA_URL,
 } from "./store.mjs";
 
@@ -57,29 +64,58 @@ export async function main(argv = process.argv) {
           confidential,
           args: filteredArgs,
         } = parseTrackArgs(args);
-        const [product, component, maybeUrl] = filteredArgs;
-        const url = maybeUrl || DEFAULT_BUGZILLA_URL;
+        // A lone URL positional means "pick from that instance", so it is not
+        // mistaken for a product name.
+        const urlOnly =
+          filteredArgs.length === 1 && /^https?:\/\//i.test(filteredArgs[0]);
+        const [product, component, maybeUrl] = urlOnly ? [] : filteredArgs;
+        let url =
+          (urlOnly ? filteredArgs[0] : maybeUrl) || DEFAULT_BUGZILLA_URL;
 
-        if (!product || !component) {
-          printTrackHelp();
-          process.exit(1);
+        let trackProduct = product;
+        let trackComponent = component;
+        // The interactive path asks for a key up front so the list is
+        // complete; asking again after saving would be a second prompt.
+        let askedForAuth = false;
+
+        if (!trackComponent) {
+          if (!process.stdin.isTTY) {
+            console.error(
+              "track requires <product> <component>, or an interactive terminal to pick from a list.",
+            );
+            process.exit(1);
+          }
+          askedForAuth = !isDelete;
+          const picked = isDelete
+            ? await pickSavedComponent(trackProduct)
+            : await pickTrackableComponent(url, trackProduct);
+          if (!picked) {
+            break;
+          }
+          trackProduct = picked.product;
+          trackComponent = picked.component;
+          url = picked.url ?? url;
         }
 
         if (isDelete) {
-          const { removed } = removeComponentConfig(product, component, url);
+          const { removed } = removeComponentConfig(
+            trackProduct,
+            trackComponent,
+            url,
+          );
           if (removed) {
             console.log(
-              `Removed component config for ${product} :: ${component}.`,
+              `Removed component config for ${trackProduct} :: ${trackComponent}.`,
             );
           } else {
             console.log(
-              `No saved config found for ${product} :: ${component}.`,
+              `No saved config found for ${trackProduct} :: ${trackComponent}.`,
             );
           }
         } else {
           const { added, updated } = addComponentConfig(
-            product,
-            component,
+            trackProduct,
+            trackComponent,
             url,
             {
               confidential,
@@ -88,18 +124,20 @@ export async function main(argv = process.argv) {
           const scope = confidential ? " (confidential bugs only)" : "";
           if (added) {
             console.log(
-              `Saved component config for ${product} :: ${component}${scope}.`,
+              `Saved component config for ${trackProduct} :: ${trackComponent}${scope}.`,
             );
           } else if (updated) {
             console.log(
-              `Updated component config for ${product} :: ${component}${scope}.`,
+              `Updated component config for ${trackProduct} :: ${trackComponent}${scope}.`,
             );
           } else {
             console.log(
-              `Component config already saved for ${product} :: ${component}${scope}.`,
+              `Component config already saved for ${trackProduct} :: ${trackComponent}${scope}.`,
             );
           }
-          await ensureBugzillaAuth(url);
+          if (!askedForAuth) {
+            await ensureBugzillaAuth(url);
+          }
         }
         break;
       }
@@ -160,6 +198,84 @@ export async function main(argv = process.argv) {
     }
     process.exit(1);
   }
+}
+
+/**
+ * @param {string} url
+ * @returns {Promise<import("./types.d.ts").ProductComponent[]>}
+ */
+async function loadProductComponents(url) {
+  const cached = getCachedProductComponents(url);
+  if (cached) {
+    return cached;
+  }
+  const auth = getBugzillaAuth(url);
+  process.stdout.write(color.blackBright("  Fetching components…\n"));
+  try {
+    const pairs = await fetchProductComponents(url, auth?.apiKey);
+    setCachedProductComponents(url, pairs);
+    return pairs;
+  } finally {
+    process.stdout.write("\x1b[1A\r\x1b[J");
+  }
+}
+
+/**
+ * @param {string} url
+ * @param {string | undefined} productArg
+ * @returns {Promise<import("./types.d.ts").ComponentConfig | null>}
+ */
+async function pickTrackableComponent(url, productArg) {
+  // Fetched before listing: an API key reveals the group-restricted products
+  // that hold confidential bugs, which are missing from an anonymous list.
+  await ensureBugzillaAuth(url);
+
+  const pairs = await loadProductComponents(url);
+  if (pairs.length === 0) {
+    console.log("No components available from this Bugzilla instance.");
+    return null;
+  }
+
+  const inProduct = productArg
+    ? pairs.filter(
+        (pair) => pair.product.toLowerCase() === productArg.toLowerCase(),
+      )
+    : [];
+  const scoped = inProduct.length > 0 ? inProduct : pairs;
+
+  const picked = await selectFromOptions(
+    scoped.map((pair) => ({
+      label: `${pair.product} :: ${pair.component}`,
+      value: pair,
+    })),
+    {
+      prompt: "Track which component?",
+      query: inProduct.length > 0 ? "" : (productArg ?? ""),
+    },
+  );
+
+  return picked ? { ...picked, url } : null;
+}
+
+/**
+ * Pick one of the already-saved components, for removal.
+ *
+ * @param {string | undefined} productArg
+ * @returns {Promise<import("./types.d.ts").ComponentConfig | null>}
+ */
+async function pickSavedComponent(productArg) {
+  const saved = getComponentConfigs();
+  if (saved.length === 0) {
+    console.log("No components saved.");
+    return null;
+  }
+  return selectFromOptions(
+    saved.map((config) => ({
+      label: `${config.product} :: ${config.component}`,
+      value: config,
+    })),
+    { prompt: "Stop tracking which component?", query: productArg ?? "" },
+  );
 }
 
 /**
@@ -601,10 +717,11 @@ Options:
 function printTrackHelp() {
   console.log(
     `
-Usage: moz-bugs track <product> <component> [url]
-       moz-bugs track <product> <component> [url] -d
+Usage: moz-bugs track [product] [component] [url]
+       moz-bugs track [product] [component] [url] --delete
 
-Save or remove a Bugzilla product/component pair to track.
+Track a Bugzilla product and component via an interactive picker, or by directly
+providing the product and component. Pass --delete to remove a tracked component.
 
 Arguments:
   product         Bugzilla product name        (e.g. Core)
@@ -618,7 +735,13 @@ Options:
   -h, --help         Show this help
 
 Examples:
-  Track a component (prompts for an API key the first time):
+  Pick a component to track from the full list:
+    moz-bugs track
+
+  Pick from one product's components:
+    moz-bugs track Core
+
+  Track a component:
     moz-bugs track Core "Machine Learning: On Device"
 
   Track only the confidential bugs of a component:
@@ -626,6 +749,9 @@ Examples:
 
   Stop tracking a component:
     moz-bugs track --delete Core "Machine Learning: On Device"
+
+  Pick a saved component to stop tracking:
+    moz-bugs track --delete
 `.trim(),
   );
 }

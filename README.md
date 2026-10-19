@@ -52,6 +52,10 @@ Save one or more components first, then run `moz-bugs list` to see open bugs acr
 - Save or remove a Bugzilla component  
   `moz-bugs track <product> <component> [url]`  
   `moz-bugs track <product> <component> [url] --delete`
+- Pick a component interactively instead of naming it  
+  `moz-bugs track`  
+  `moz-bugs track <product>` narrows the list to one product, and
+  `moz-bugs track --delete` picks from your saved components.
 - Track only the confidential/security bugs of a component  
   `moz-bugs track <product> <component> [url] --confidential`  
   Re-run without `--confidential` to go back to listing every bug.
@@ -85,6 +89,12 @@ Meta bugs (`[meta]` in the summary) are shown as indented trees with their child
 ### track
 
 ```sh
+# Pick a component from a filterable list of everything the instance exposes
+moz-bugs track
+
+# Same, narrowed to one product
+moz-bugs track "Core"
+
 # Add a component
 moz-bugs track "Core" "Machine Learning: On Device"
 
@@ -93,6 +103,9 @@ moz-bugs track "Core" "Machine Learning: On Device" https://bugzilla-dev.allizom
 
 # Remove a saved component
 moz-bugs track "Core" "Machine Learning: On Device" --delete
+
+# Pick a saved component to remove
+moz-bugs track --delete
 ```
 
 ### file
