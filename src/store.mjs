@@ -69,23 +69,37 @@ export function normalizeBugzillaUrl(url) {
  * @param {string} product
  * @param {string} component
  * @param {string} url
- * @returns {{ added: boolean }}
+ * @param {{ confidential?: boolean }} [options]
+ * @returns {{ added: boolean; updated: boolean }}
  */
-export function addComponentConfig(product, component, url) {
+export function addComponentConfig(product, component, url, options = {}) {
   const store = loadStore();
   const normalizedUrl = normalizeBugzillaUrl(url);
-  const exists = store.components.some(
+  const confidential = Boolean(options.confidential);
+  const index = store.components.findIndex(
     (c) =>
       c.product === product &&
       c.component === component &&
-      c.url === normalizedUrl
+      c.url === normalizedUrl,
   );
-  if (exists) {
-    return { added: false };
+  if (index !== -1) {
+    if (Boolean(store.components[index].confidential) === confidential) {
+      return { added: false, updated: false };
+    }
+    store.components = [...store.components];
+    const { confidential: _dropped, ...rest } = store.components[index];
+    store.components[index] = confidential ? { ...rest, confidential } : rest;
+    saveStore(store);
+    return { added: false, updated: true };
   }
-  store.components = [...store.components, { product, component, url: normalizedUrl }];
+  /** @type {ComponentConfig} */
+  const added = { product, component, url: normalizedUrl };
+  if (confidential) {
+    added.confidential = true;
+  }
+  store.components = [...store.components, added];
   saveStore(store);
-  return { added: true };
+  return { added: true, updated: false };
 }
 
 /**
@@ -104,7 +118,7 @@ export function removeComponentConfig(product, component, url) {
         c.product === product &&
         c.component === component &&
         c.url === normalizedUrl
-      )
+      ),
   );
   if (store.components.length === before) {
     return { removed: false };
@@ -125,9 +139,7 @@ export function getComponentConfigs() {
 export function getBugzillaAuth(url) {
   const normalizedUrl = normalizeBugzillaUrl(url);
   const store = loadStore();
-  return (
-    store.bugzillaAuth?.find((a) => a.url === normalizedUrl) ?? null
-  );
+  return store.bugzillaAuth?.find((a) => a.url === normalizedUrl) ?? null;
 }
 
 /**
@@ -145,7 +157,10 @@ export function setBugzillaAuth(url, apiKey) {
   const existing = store.bugzillaAuth ?? [];
   const index = existing.findIndex((a) => a.url === normalizedUrl);
   if (index === -1) {
-    store.bugzillaAuth = [...existing, { url: normalizedUrl, apiKey: trimmedKey }];
+    store.bugzillaAuth = [
+      ...existing,
+      { url: normalizedUrl, apiKey: trimmedKey },
+    ];
     saveStore(store);
     return { added: true, updated: false };
   }

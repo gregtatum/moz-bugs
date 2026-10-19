@@ -155,6 +155,10 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   // the sort order is unambiguous rather than being broken up by meta-bug trees.
   if (requestedSortFields.length > 0) {
     const visible = sorted.filter((bug) => matchesBugFilter(bug, filters));
+    if (visible.length === 0) {
+      printNoMatches(filters);
+      return;
+    }
     const widths = computeColumnWidths(visible);
     for (const bug of visible) {
       printBugLine(bug, url, "", widths);
@@ -190,6 +194,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     filters.assigned || filters.priority || filters.severity || filters.confidential,
   );
   const widths = computeColumnWidths([...sorted, ...Array.from(childMap.values())]);
+  let printedAny = false;
 
   for (const bug of sorted.filter((bug) => !metaChildIds.has(bug.id))) {
     const isMeta = bug.summary.toLowerCase().includes("[meta]");
@@ -197,6 +202,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
     if (!isMeta) {
       if (!matchesBugFilter(bug, filters)) continue;
       printBugLine(bug, url, "", widths);
+      printedAny = true;
     } else {
       const children = (bug.depends_on ?? [])
         .flatMap((id) => {
@@ -214,6 +220,7 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
       }
 
       printBugLine(bug, url, "", widths);
+      printedAny = true;
       for (let i = 0; i < children.length; i++) {
         const isLast = i === children.length - 1;
         printBugLine(children[i], url, isLast ? "└─ " : "├─ ", widths);
@@ -221,6 +228,22 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
       if (children.length > 0) console.log("");
     }
   }
+
+  if (!printedAny) {
+    printNoMatches(filters);
+  }
+}
+
+/**
+ * Empty state for when the component has open bugs but none pass the filters.
+ * @param {BugFilters} filters
+ */
+function printNoMatches(filters) {
+  console.log(
+    color.blackBright(
+      filters.confidential ? "  (no confidential bugs)" : "  (no matching bugs)",
+    ),
+  );
 }
 
 // Bugzilla's front end rejects request lines past roughly 8 KB with a 414.
@@ -293,6 +316,12 @@ function printHeader(product, component, url, bugCount, filters) {
   const p = encodeURIComponent(product);
   const c = encodeURIComponent(component);
   const openParams = new URLSearchParams({ product, component, bug_status: "__open__" });
+  if (filters?.confidential) {
+    // Bugzilla has no "is confidential" field; a bug is restricted when it
+    // belongs to at least one group.
+    openParams.append("f1", "bug_group");
+    openParams.append("o1", "isnotempty");
+  }
   if (filters?.priority) openParams.append("priority", filters.priority);
   if (filters?.severity) openParams.append("bug_severity", filters.severity);
   if (filters?.assigned) {
@@ -304,7 +333,8 @@ function printHeader(product, component, url, bugCount, filters) {
   const fixedUrl = `${url}/buglist.cgi?product=${p}&component=${c}&chfield=resolution&chfieldfrom=-6m&chfieldvalue=FIXED&bug_status=__closed__`;
   const fileUrl  = `${url}/enter_bug.cgi?product=${p}&component=${c}`;
 
-  const titleBar = color.bgCyan.black(` ${product} :: ${component}  ·  ${bugCount} open bug${bugCount !== 1 ? "s" : ""} `);
+  const scope = filters?.confidential ? "  ·  confidential only" : "";
+  const titleBar = color.bgCyan.black(` ${product} :: ${component}  ·  ${bugCount} open bug${bugCount !== 1 ? "s" : ""}${scope} `);
 
   console.log(`\n  ${titleBar}`);
   console.log(`  ${color.blackBright("├─")} ${termLink("See Open Bugs",  openUrl)}`);

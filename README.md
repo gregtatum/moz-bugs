@@ -52,6 +52,9 @@ Save one or more components first, then run `moz-bugs list` to see open bugs acr
 - Save or remove a Bugzilla component  
   `moz-bugs component <product> <component> [url]`  
   `moz-bugs component <product> <component> [url] --delete`
+- Track only the confidential/security bugs of a component  
+  `moz-bugs component <product> <component> [url] --confidential`  
+  Re-run without `--confidential` to go back to listing every bug.
 - Open a browser tab to file a new bug  
   `moz-bugs file`  
   `moz-bugs file --component <query>`

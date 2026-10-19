@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+- `--confidential` flag (alias `--security`) for `component`, saving a component
+  that only ever lists its confidential bugs. `list` and `triage` honor it, and
+  re-running `component` without the flag goes back to listing every bug.
+
+### Changed
+- A component whose open bugs are all filtered out now prints an explicit
+  empty state instead of a bare header, and the header notes when a listing is
+  confidential-only.
+
 ### Fixed
 - `list` no longer fails with `414 URI Too Long` on components with many meta
   bugs. Meta-bug children are now fetched in batches instead of as a single

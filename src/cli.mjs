@@ -52,7 +52,11 @@ export async function main(argv = process.argv) {
           printComponentHelp();
           break;
         }
-        const { isDelete, args: filteredArgs } = parseDeleteArgs(args);
+        const {
+          isDelete,
+          confidential,
+          args: filteredArgs,
+        } = parseComponentArgs(args);
         const [product, component, maybeUrl] = filteredArgs;
         const url = maybeUrl || DEFAULT_BUGZILLA_URL;
 
@@ -73,14 +77,26 @@ export async function main(argv = process.argv) {
             );
           }
         } else {
-          const { added } = addComponentConfig(product, component, url);
+          const { added, updated } = addComponentConfig(
+            product,
+            component,
+            url,
+            {
+              confidential,
+            },
+          );
+          const scope = confidential ? " (confidential bugs only)" : "";
           if (added) {
             console.log(
-              `Saved component config for ${product} :: ${component}.`,
+              `Saved component config for ${product} :: ${component}${scope}.`,
+            );
+          } else if (updated) {
+            console.log(
+              `Updated component config for ${product} :: ${component}${scope}.`,
             );
           } else {
             console.log(
-              `Component config already saved for ${product} :: ${component}.`,
+              `Component config already saved for ${product} :: ${component}${scope}.`,
             );
           }
           await ensureBugzillaAuth(url);
@@ -208,12 +224,17 @@ async function runAll(filters = {}) {
 
   for (const config of visible) {
     const auth = getBugzillaAuth(config.url);
+    // A component saved with --confidential is always listed as confidential
+    // only; the list-level flag can add the restriction but never remove it.
+    const componentFilters = config.confidential
+      ? { ...filters, confidential: true }
+      : filters;
     await runComponentBugs(
       config.product,
       config.component,
       config.url,
       auth?.apiKey,
-      filters,
+      componentFilters,
     );
   }
 }
@@ -390,19 +411,24 @@ async function ensureBugzillaAuth(url) {
 
 /**
  * @param {string[]} args
- * @returns {{ isDelete: boolean; args: string[] }}
+ * @returns {{ isDelete: boolean; confidential: boolean; args: string[] }}
  */
-function parseDeleteArgs(args) {
+function parseComponentArgs(args) {
   const filtered = [];
   let isDelete = false;
+  let confidential = false;
   for (const arg of args) {
     if (arg === "-d" || arg === "--delete") {
       isDelete = true;
       continue;
     }
+    if (arg === "--confidential" || arg === "--security") {
+      confidential = true;
+      continue;
+    }
     filtered.push(arg);
   }
-  return { isDelete, args: filtered };
+  return { isDelete, confidential, args: filtered };
 }
 
 /**
@@ -586,8 +612,20 @@ Arguments:
   url             Bugzilla instance URL        (default: https://bugzilla.mozilla.org)
 
 Options:
-  -d, --delete    Remove the component instead of adding it
-  -h, --help      Show this help
+  -d, --delete       Remove the component instead of adding it
+      --confidential Only list confidential or security bugs for this component.
+                     Re-run without the flag to go back to listing every bug.
+  -h, --help         Show this help
+
+Examples:
+  Track a component (prompts for an API key the first time):
+    moz-bugs component Core "Machine Learning: On Device"
+
+  Track only the confidential bugs of a component:
+    moz-bugs component Core "DOM: Security" --confidential
+
+  Stop tracking a component:
+    moz-bugs component --delete Core "Machine Learning: On Device"
 `.trim(),
   );
 }

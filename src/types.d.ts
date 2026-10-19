@@ -7,6 +7,7 @@ export type ComponentConfig = {
   product: string;
   component: string;
   url: string;
+  confidential?: boolean;
 };
 
 export type BugzillaAuth = {

@@ -48,7 +48,10 @@ async function fetchTriageBugs(config, apiKey) {
     include_fields: TRIAGE_FIELDS,
   });
   const bugs = await fetchBugs(new URL(`/rest/bug?${params}`, url), url, apiKey);
-  return bugs.filter(needsTriage);
+  const scoped = config.confidential
+    ? bugs.filter((bug) => (bug.groups?.length ?? 0) > 0)
+    : bugs;
+  return scoped.filter(needsTriage);
 }
 
 /**
