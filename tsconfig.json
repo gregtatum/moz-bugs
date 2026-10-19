@@ -15,6 +15,7 @@
   "include": [
     "src/**/*.js",
     "src/**/*.mjs",
-    "src/**/*.d.ts"
+    "src/**/*.d.ts",
+    "publish.mjs"
   ]
 }

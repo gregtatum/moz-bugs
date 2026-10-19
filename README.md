@@ -128,9 +128,9 @@ moz-bugs triage --interactive --dryrun
 Login to npm via `npm login`, then run the helper script from the repo root:
 
 ```sh
-./publish.sh [patch|minor|major]
+./publish.mjs <patch|minor|major>
 ```
 
-## AI Use Disclosure
+## AI Use
 
 This tool was primarily authored using AI agentic programming flows.
