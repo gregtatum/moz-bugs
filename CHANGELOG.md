@@ -20,6 +20,9 @@
   confidential-only.
 
 ### Fixed
+- The header bug count now reflects the active filters instead of counting
+  every open bug in the component, so a confidential-only listing no longer
+  reports the component's full open-bug total.
 - `list` no longer fails with `414 URI Too Long` on components with many meta
   bugs. Meta-bug children are now fetched in batches instead of as a single
   request with every child id in the URL.

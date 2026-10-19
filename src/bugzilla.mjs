@@ -109,7 +109,10 @@ export async function runComponentBugs(
   const endpoint = new URL(`/rest/bug?${params}`, url);
   const bugs = await fetchBugs(endpoint, url, apiKey);
 
-  printHeader(product, component, url, bugs.length, filters);
+  const matchCount = bugs.filter((bug) =>
+    matchesBugFilter(bug, filters),
+  ).length;
+  printHeader(product, component, url, matchCount, filters);
 
   if (bugs.length === 0) {
     console.log(color.blackBright("  (no open bugs)"));
