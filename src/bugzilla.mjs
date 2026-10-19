@@ -172,14 +172,15 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
   /** @type {Map<number, Bug>} */
   const childMap = new Map();
   if (metaChildIds.size > 0) {
-    const childParams = new URLSearchParams({
-      include_fields: "id,summary,type,priority,severity,assigned_to,assigned_to_detail,groups,last_change_time",
-      resolution: "---",
-    });
-    for (const id of metaChildIds) {
-      childParams.append("id", String(id));
-    }
-    const fetchedChildren = await fetchBugs(new URL(`/rest/bug?${childParams}`, url), url, apiKey);
+    const fetchedChildren = await fetchBugsByIds(
+      Array.from(metaChildIds),
+      {
+        include_fields: "id,summary,type,priority,severity,assigned_to,assigned_to_detail,groups,last_change_time",
+        resolution: "---",
+      },
+      url,
+      apiKey,
+    );
     for (const child of fetchedChildren) {
       childMap.set(child.id, child);
     }
@@ -220,6 +221,38 @@ export async function runComponentBugs(product, component, url, apiKey, filters 
       if (children.length > 0) console.log("");
     }
   }
+}
+
+// Bugzilla's front end rejects request lines past roughly 8 KB with a 414.
+// A component with many meta bugs can easily have hundreds of children, so
+// id lists are split into batches that keep each URL well under that limit.
+const ID_BATCH_SIZE = 150;
+
+/**
+ * Fetch bugs by id, batching the id list across several requests so the URL
+ * never grows long enough to be rejected.
+ *
+ * @param {number[]} ids
+ * @param {Record<string, string>} searchParams
+ * @param {string} url
+ * @param {string | undefined} apiKey
+ * @returns {Promise<Bug[]>}
+ */
+export async function fetchBugsByIds(ids, searchParams, url, apiKey) {
+  /** @type {URL[]} */
+  const endpoints = [];
+  for (let i = 0; i < ids.length; i += ID_BATCH_SIZE) {
+    const params = new URLSearchParams(searchParams);
+    for (const id of ids.slice(i, i + ID_BATCH_SIZE)) {
+      params.append("id", String(id));
+    }
+    endpoints.push(new URL(`/rest/bug?${params}`, url));
+  }
+
+  const batches = await Promise.all(
+    endpoints.map((endpoint) => fetchBugs(endpoint, url, apiKey)),
+  );
+  return batches.flat();
 }
 
 /**

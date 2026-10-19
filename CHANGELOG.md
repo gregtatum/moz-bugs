@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- `list` no longer fails with `414 URI Too Long` on components with many meta
+  bugs. Meta-bug children are now fetched in batches instead of as a single
+  request with every child id in the URL.
+
 ## v2.4.0 — 2026-10-19
 
 ### Changed
