@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v3.0.0 — 2026-10-19
+
 ### Added
 - `track` opens an interactive picker when the component is omitted. The list
   of products and components comes from the Bugzilla API (`/rest/product`),
