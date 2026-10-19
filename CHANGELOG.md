@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Changed
+- `triage` now lists the bugs that need a priority or severity instead of
+  immediately prompting. Pass `--interactive` (`-i`) for the previous
+  step-through behavior.
+
+## v2.3.0 — 2026-08-10
+
 ### Added
 - `--confidential` flag (alias `--security`) for `list`, showing only confidential
   bugs restricted to a security group. Meta bugs with no confidential children are
@@ -11,7 +18,7 @@
 - Bug-id hyperlinks no longer drop on the line following a summary that soft-wraps;
   each link now carries a unique OSC 8 `id` so terminals stop mis-associating them.
 
-## v2.1.0 — 2026-05-18
+## v2.2.0 — 2026-05-18
 
 ### Changed
 - "See Open Bugs" link now reflects active CLI filters (priority, severity, assignee)
