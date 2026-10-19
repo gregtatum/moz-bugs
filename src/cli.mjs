@@ -47,21 +47,21 @@ export async function main(argv = process.argv) {
         await runAll(parseListFilters(args));
         break;
       }
-      case "component": {
+      case "track": {
         if (args.includes("--help") || args.includes("-h")) {
-          printComponentHelp();
+          printTrackHelp();
           break;
         }
         const {
           isDelete,
           confidential,
           args: filteredArgs,
-        } = parseComponentArgs(args);
+        } = parseTrackArgs(args);
         const [product, component, maybeUrl] = filteredArgs;
         const url = maybeUrl || DEFAULT_BUGZILLA_URL;
 
         if (!product || !component) {
-          printComponentHelp();
+          printTrackHelp();
           process.exit(1);
         }
 
@@ -122,7 +122,7 @@ export async function main(argv = process.argv) {
         const components = getComponentConfigs();
         if (components.length === 0) {
           console.log("No components saved.");
-          console.log("Add one with: moz-bugs component <product> <component>");
+          console.log("Add one with: moz-bugs track <product> <component>");
           break;
         }
         if (!interactive) {
@@ -141,7 +141,7 @@ export async function main(argv = process.argv) {
       default: {
         const suggestion = closestMatch(String(command), [
           "list",
-          "component",
+          "track",
           "triage",
           "file",
         ]);
@@ -218,7 +218,7 @@ async function runAll(filters = {}) {
 
   if (visible.length === 0) {
     console.log("No components saved.");
-    console.log("Add one with: moz-bugs component <product> <component> [url]");
+    console.log("Add one with: moz-bugs track <product> <component> [url]");
     return;
   }
 
@@ -253,14 +253,14 @@ async function runFile(args) {
     const matches = resolveComponentQuery(componentQuery, savedComponents);
     if (matches.length === 0) {
       console.log("No components saved.");
-      console.log("Add one with: moz-bugs component <product> <component>");
+      console.log("Add one with: moz-bugs track <product> <component>");
       return;
     }
     config = matches[0];
   } else {
     if (savedComponents.length === 0) {
       console.log("No components saved.");
-      console.log("Add one with: moz-bugs component <product> <component>");
+      console.log("Add one with: moz-bugs track <product> <component>");
       return;
     }
     if (!process.stdin.isTTY) {
@@ -388,7 +388,7 @@ async function ensureBugzillaAuth(url) {
 
   if (!process.stdin.isTTY) {
     console.warn(
-      `No Bugzilla API key configured for ${url}. Run the component command in a terminal to set one.`,
+      `No Bugzilla API key configured for ${url}. Run the track command in a terminal to set one.`,
     );
     return;
   }
@@ -413,7 +413,7 @@ async function ensureBugzillaAuth(url) {
  * @param {string[]} args
  * @returns {{ isDelete: boolean; confidential: boolean; args: string[] }}
  */
-function parseComponentArgs(args) {
+function parseTrackArgs(args) {
   const filtered = [];
   let isDelete = false;
   let confidential = false;
@@ -541,7 +541,7 @@ Usage: moz-bugs <command> [options]
 Commands:
   list            List open bugs for all saved components
   file            Open a browser to file a new bug
-  component       Save or remove a Bugzilla product/component to track
+  track           Save or remove a Bugzilla product/component to track
   triage          List un-triaged bugs (add --interactive to assign priority/severity)
 
 Options:
@@ -598,11 +598,11 @@ Options:
 }
 
 // NOTE: Keep in sync with the README.md.
-function printComponentHelp() {
+function printTrackHelp() {
   console.log(
     `
-Usage: moz-bugs component <product> <component> [url]
-       moz-bugs component <product> <component> [url] -d
+Usage: moz-bugs track <product> <component> [url]
+       moz-bugs track <product> <component> [url] -d
 
 Save or remove a Bugzilla product/component pair to track.
 
@@ -619,13 +619,13 @@ Options:
 
 Examples:
   Track a component (prompts for an API key the first time):
-    moz-bugs component Core "Machine Learning: On Device"
+    moz-bugs track Core "Machine Learning: On Device"
 
   Track only the confidential bugs of a component:
-    moz-bugs component Core "DOM: Security" --confidential
+    moz-bugs track Core "DOM: Security" --confidential
 
   Stop tracking a component:
-    moz-bugs component --delete Core "Machine Learning: On Device"
+    moz-bugs track --delete Core "Machine Learning: On Device"
 `.trim(),
   );
 }

@@ -3,11 +3,13 @@
 ## Unreleased
 
 ### Added
-- `--confidential` flag (alias `--security`) for `component`, saving a component
+- `--confidential` flag (alias `--security`) for `track`, saving a component
   that only ever lists its confidential bugs. `list` and `triage` honor it, and
-  re-running `component` without the flag goes back to listing every bug.
+  re-running `track` without the flag goes back to listing every bug.
 
 ### Changed
+- **Breaking:** the `component` sub-command is now `track`. Its arguments and
+  flags are unchanged; `moz-bugs component` is no longer recognized.
 - A component whose open bugs are all filtered out now prints an explicit
   empty state instead of a bare header, and the header notes when a listing is
   confidential-only.

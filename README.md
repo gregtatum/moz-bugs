@@ -36,7 +36,7 @@ npx moz-bugs
 Add a Bugzilla component to track — you will be prompted for an API key the first time:
 
 ```sh
-moz-bugs component "Core" "Machine Learning: On Device"
+moz-bugs track "Core" "Machine Learning: On Device"
 ```
 
 API keys can be generated at `https://bugzilla.mozilla.org/userprefs.cgi?tab=apikey`.
@@ -50,10 +50,10 @@ Save one or more components first, then run `moz-bugs list` to see open bugs acr
 - List open bugs across all saved components  
   `moz-bugs list`
 - Save or remove a Bugzilla component  
-  `moz-bugs component <product> <component> [url]`  
-  `moz-bugs component <product> <component> [url] --delete`
+  `moz-bugs track <product> <component> [url]`  
+  `moz-bugs track <product> <component> [url] --delete`
 - Track only the confidential/security bugs of a component  
-  `moz-bugs component <product> <component> [url] --confidential`  
+  `moz-bugs track <product> <component> [url] --confidential`  
   Re-run without `--confidential` to go back to listing every bug.
 - Open a browser tab to file a new bug  
   `moz-bugs file`  
@@ -82,17 +82,17 @@ Valid sort fields: `id`, `creation_time`, `last_change_time`, `priority`, `sever
 
 Meta bugs (`[meta]` in the summary) are shown as indented trees with their child bugs nested beneath them. Passing `--sort` switches to a flat list instead.
 
-### component
+### track
 
 ```sh
 # Add a component
-moz-bugs component "Core" "Machine Learning: On Device"
+moz-bugs track "Core" "Machine Learning: On Device"
 
 # Add a component from a non-default Bugzilla instance
-moz-bugs component "Core" "Machine Learning: On Device" https://bugzilla-dev.allizom.org
+moz-bugs track "Core" "Machine Learning: On Device" https://bugzilla-dev.allizom.org
 
 # Remove a saved component
-moz-bugs component "Core" "Machine Learning: On Device" --delete
+moz-bugs track "Core" "Machine Learning: On Device" --delete
 ```
 
 ### file
