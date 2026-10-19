@@ -217,19 +217,17 @@ export async function runComponentBugs(
     filters.severity ||
     filters.confidential,
   );
-  const widths = computeColumnWidths([
-    ...sorted,
-    ...Array.from(childMap.values()),
-  ]);
-  let printedAny = false;
+  // Collect the rows to render before measuring the columns, so bugs the
+  // filters hide cannot widen the assignee or days columns.
+  /** @type {Array<{ bug: Bug, treeChar: string, spaceAfter?: boolean }>} */
+  const rows = [];
 
   for (const bug of sorted.filter((bug) => !metaChildIds.has(bug.id))) {
     const isMeta = bug.summary.toLowerCase().includes("[meta]");
 
     if (!isMeta) {
       if (!matchesBugFilter(bug, filters)) continue;
-      printBugLine(bug, url, "", widths);
-      printedAny = true;
+      rows.push({ bug, treeChar: "" });
     } else {
       const children = (bug.depends_on ?? [])
         .flatMap((id) => {
@@ -250,18 +248,27 @@ export async function runComponentBugs(
         continue;
       }
 
-      printBugLine(bug, url, "", widths);
-      printedAny = true;
+      rows.push({ bug, treeChar: "" });
       for (let i = 0; i < children.length; i++) {
         const isLast = i === children.length - 1;
-        printBugLine(children[i], url, isLast ? "└─ " : "├─ ", widths);
+        rows.push({
+          bug: children[i],
+          treeChar: isLast ? "└─ " : "├─ ",
+          spaceAfter: isLast,
+        });
       }
-      if (children.length > 0) console.log("");
     }
   }
 
-  if (!printedAny) {
+  if (rows.length === 0) {
     printNoMatches(filters);
+    return;
+  }
+
+  const widths = computeColumnWidths(rows.map((row) => row.bug));
+  for (const row of rows) {
+    printBugLine(row.bug, url, row.treeChar, widths);
+    if (row.spaceAfter) console.log("");
   }
 }
 

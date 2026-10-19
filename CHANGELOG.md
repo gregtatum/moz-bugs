@@ -23,6 +23,9 @@
 - The header bug count now reflects the active filters instead of counting
   every open bug in the component, so a confidential-only listing no longer
   reports the component's full open-bug total.
+- Column alignment in the tree view is measured from the rows that are
+  actually printed, so bugs hidden by a filter no longer pad out the assignee
+  and last-activity columns.
 - `list` no longer fails with `414 URI Too Long` on components with many meta
   bugs. Meta-bug children are now fetched in batches instead of as a single
   request with every child id in the URL.
