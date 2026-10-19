@@ -51,7 +51,18 @@ export async function main(argv = process.argv) {
           printListHelp();
           break;
         }
-        await runAll(parseListFilters(args));
+        const filters = parseListFilters(args);
+        if (args.includes("--interactive") || args.includes("-i")) {
+          if (!process.stdin.isTTY) {
+            console.error(
+              "list --interactive requires an interactive terminal.",
+            );
+            process.exit(1);
+          }
+          await runListInteractive(filters);
+          break;
+        }
+        await runAll(filters);
         break;
       }
       case "track": {
@@ -88,7 +99,11 @@ export async function main(argv = process.argv) {
           askedForAuth = !isDelete;
           const picked = isDelete
             ? await pickSavedComponent(trackProduct)
-            : await pickTrackableComponent(url, trackProduct);
+            : await pickInstanceComponent(
+                url,
+                trackProduct,
+                "Track which component?",
+              );
           if (!picked) {
             break;
           }
@@ -223,9 +238,10 @@ async function loadProductComponents(url) {
 /**
  * @param {string} url
  * @param {string | undefined} productArg
+ * @param {string} prompt
  * @returns {Promise<import("./types.d.ts").ComponentConfig | null>}
  */
-async function pickTrackableComponent(url, productArg) {
+async function pickInstanceComponent(url, productArg, prompt) {
   // Fetched before listing: an API key reveals the group-restricted products
   // that hold confidential bugs, which are missing from an anonymous list.
   await ensureBugzillaAuth(url);
@@ -249,7 +265,7 @@ async function pickTrackableComponent(url, productArg) {
       value: pair,
     })),
     {
-      prompt: "Track which component?",
+      prompt,
       query: inProduct.length > 0 ? "" : (productArg ?? ""),
     },
   );
@@ -353,6 +369,40 @@ async function runAll(filters = {}) {
       componentFilters,
     );
   }
+}
+
+/**
+ * @param {import("./types.d.ts").BugFilters} filters
+ */
+async function runListInteractive(filters) {
+  const picked = await pickInstanceComponent(
+    DEFAULT_BUGZILLA_URL,
+    filters.component,
+    "List bugs for which component?",
+  );
+  if (!picked) {
+    return;
+  }
+
+  const saved = getComponentConfigs().find(
+    (config) =>
+      config.url === picked.url &&
+      config.product === picked.product &&
+      config.component === picked.component,
+  );
+  const { component: _query, ...bugFilters } = filters;
+  const componentFilters = saved?.confidential
+    ? { ...bugFilters, confidential: true }
+    : bugFilters;
+
+  const auth = getBugzillaAuth(picked.url);
+  await runComponentBugs(
+    picked.product,
+    picked.component,
+    picked.url,
+    auth?.apiKey,
+    componentFilters,
+  );
 }
 
 /**
@@ -655,7 +705,7 @@ function printHelp() {
 Usage: moz-bugs <command> [options]
 
 Commands:
-  list            List open bugs for all saved components
+  list            List open bugs for all saved components (add --interactive to pick one)
   file            Open a browser to file a new bug
   track           Save or remove a Bugzilla product/component to track
   triage          List un-triaged bugs (add --interactive to assign priority/severity)
@@ -693,8 +743,9 @@ Usage: moz-bugs list [options]
 List open bugs across all saved components.
 
 Options:
-  -c, --component <query>   Fuzzy-match against saved components;
-                            or use "Product :: Component" to look up directly,
+  -i, --interactive         Pick the component interactively.
+  -c, --component <query>   Fuzzy-match against saved components.
+                            Use "Product :: Component" to look up directly,
                             e.g. "Core :: Machine Learning: General"
   -a, --assigned <query>    Show only bugs whose assignee fuzzy-matches <query>
   -p, --priority <value>    Filter by priority  (e.g. p1, P2, 1)

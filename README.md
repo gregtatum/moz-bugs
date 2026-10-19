@@ -49,6 +49,8 @@ Save one or more components first, then run `moz-bugs list` to see open bugs acr
 
 - List open bugs across all saved components  
   `moz-bugs list`
+- Interactively choose a componenent to list from
+  `moz-bugs list --interactive`
 - Save or remove a Bugzilla component  
   `moz-bugs track <product> <component> [url]`  
   `moz-bugs track <product> <component> [url] --delete`
@@ -74,6 +76,7 @@ moz-bugs list [options]
 
 | Flag | Description |
 |---|---|
+| `-i, --interactive` | Interactively choose a component to list from |
 | `-c, --component <query>` | Fuzzy-match against saved components, or use `"Product :: Component"` to query directly without a saved config |
 | `-a, --assigned <query>` | Show only bugs whose assignee fuzzy-matches `<query>` |
 | `-p, --priority <value>` | Filter by priority (e.g. `p1`, `P2`, `1`) |
@@ -81,7 +84,6 @@ moz-bugs list [options]
 | `-s, --sort <fields>` | Comma-separated sort fields, fuzzy-matched (e.g. `--sort priority,creation`) |
 | `--active` | Show two sections: **Active** (assigned, touched within 30 days) and **Stale** (assigned, no activity for 30+ days). Excludes bugs assigned to nobody. |
 | `--confidential` | Show only confidential bugs (restricted to a security group, shown in red). Alias: `--security` |
-
 Valid sort fields: `id`, `creation_time`, `last_change_time`, `priority`, `severity`, `assigned_to`, `summary`. Summary is always appended as the final tiebreaker.
 
 Meta bugs (`[meta]` in the summary) are shown as indented trees with their child bugs nested beneath them. Passing `--sort` switches to a flat list instead.

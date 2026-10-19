@@ -8,6 +8,10 @@
   is filtered as you type, and is cached for a week beside the config file.
   `track <product>` narrows it to one product and `track --delete` picks from
   the saved components instead.
+- `list --interactive` (`-i`) picks a single component to list from the same
+  type-to-filter picker `track` uses, covering every component the Bugzilla
+  instance exposes rather than only the saved ones. `-c` seeds the filter box,
+  or narrows the picker when it names a product.
 - `--confidential` flag (alias `--security`) for `track`, saving a component
   that only ever lists its confidential bugs. `list` and `triage` honor it, and
   re-running `track` without the flag goes back to listing every bug.
