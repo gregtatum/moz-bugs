@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v2.4.0 — 2026-10-19
+
 ### Changed
 - `triage` now lists the bugs that need a priority or severity instead of
   immediately prompting. Pass `--interactive` (`-i`) for the previous
