@@ -34,9 +34,6 @@ function resolveProductCachePath() {
 const PRODUCT_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * Read the cached product list for a Bugzilla instance, or null when it is
- * missing, unreadable, or older than a week.
- *
  * @param {string} url
  * @returns {ProductComponent[] | null}
  */

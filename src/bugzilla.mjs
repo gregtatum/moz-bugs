@@ -186,7 +186,6 @@ export async function runComponentBugs(
     return;
   }
 
-  // Default view: batch-fetch children of meta bugs and render as indented trees.
   const metaChildIds = new Set(
     sorted
       .filter((bug) => bug.summary.toLowerCase().includes("[meta]"))
@@ -273,7 +272,6 @@ export async function runComponentBugs(
 }
 
 /**
- * Empty state for when the component has open bugs but none pass the filters.
  * @param {BugFilters} filters
  */
 function printNoMatches(filters) {
@@ -292,9 +290,6 @@ function printNoMatches(filters) {
 const ID_BATCH_SIZE = 150;
 
 /**
- * Fetch bugs by id, batching the id list across several requests so the URL
- * never grows long enough to be rejected.
- *
  * @param {number[]} ids
  * @param {Record<string, string>} searchParams
  * @param {string} url
@@ -455,10 +450,7 @@ function termLink(text, url) {
   return `\x1b]8;;${url}\x1b\\${color.cyan(text)}\x1b]8;;\x1b\\`;
 }
 
-/**
- * Returns :nick if the real_name contains [:nick], otherwise the email username.
- * @param {Bug} bug
- */
+/** @param {Bug} bug */
 function formatAssignee(bug) {
   const nickMatch = (bug.assigned_to_detail?.real_name ?? "").match(
     /\[:([^\]]+)\]/,
@@ -478,7 +470,6 @@ function formatDaysAgo(days) {
 }
 
 /**
- * Pre-compute column widths for aligned rendering across a set of bugs.
  * @param {Bug[]} bugs
  * @returns {{ assigneeWidth: number, daysWidth: number }}
  */

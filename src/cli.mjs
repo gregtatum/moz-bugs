@@ -274,8 +274,6 @@ async function pickInstanceComponent(url, productArg, prompt) {
 }
 
 /**
- * Pick one of the already-saved components, for removal.
- *
  * @param {string | undefined} productArg
  * @returns {Promise<import("./types.d.ts").ComponentConfig | null>}
  */
@@ -323,7 +321,6 @@ function resolveComponentQuery(query, savedComponents) {
     return fuzzyMatches;
   }
 
-  // Levenshtein fallback: pick the closest saved component
   let closest = null;
   let closestDist = Infinity;
 
@@ -527,7 +524,6 @@ function openBrowserUrl(url) {
 }
 
 /**
- * Finds the value of the first matching flag in args.
  * @param {string[]} args
  * @param {string[]} names
  * @returns {string | null}

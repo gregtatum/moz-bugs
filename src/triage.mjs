@@ -34,7 +34,6 @@ const SEVERITY_OPTIONS = [
 const SEVERITY_DEFAULT = 2; // S3
 
 /**
- * Fetch the open bugs that need triage for a component.
  * @param {ComponentConfig} config
  * @param {string | undefined} apiKey
  * @returns {Promise<Bug[]>}
@@ -55,8 +54,6 @@ async function fetchTriageBugs(config, apiKey) {
 }
 
 /**
- * Non-interactive triage: list the open bugs that still need a priority or
- * severity, grouped by component, without prompting.
  * @param {ComponentConfig[]} components
  * @param {(url: string) => BugzillaAuth | null} getAuth
  */

@@ -2,7 +2,6 @@
 import color from "cli-color";
 import { fuzzyMatch } from "./bugzilla.mjs";
 
-/** How many options are visible at once. */
 const WINDOW_SIZE = 10;
 
 /**
