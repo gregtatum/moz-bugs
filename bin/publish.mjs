@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import color from "cli-color";
 
-const ROOT_DIR = dirname(fileURLToPath(import.meta.url));
+const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageJsonPath = resolve(ROOT_DIR, "package.json");
 const packageLockPath = resolve(ROOT_DIR, "package-lock.json");
 const changelogPath = resolve(ROOT_DIR, "CHANGELOG.md");
@@ -244,7 +244,7 @@ function createCheck(dryRun) {
 /** @returns {string} */
 function usage() {
   return `
-Usage: ./publish.mjs <patch|minor|major> [options]
+Usage: ./bin/publish.mjs <patch|minor|major> [options]
 
 Bumps the version, promotes the "## Unreleased" changelog section to the new
 version, commits, tags, publishes to npm, and pushes.

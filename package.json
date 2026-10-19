@@ -24,7 +24,8 @@
   },
   "files": [
     "src",
-    "bin"
+    "bin",
+    "!bin/publish.mjs"
   ],
   "dependencies": {
     "cli-color": "^1.4.0"
