@@ -1,6 +1,9 @@
 // @ts-check
 import color from "cli-color";
-import { fetchBugs, printBugLine } from "./bugzilla.mjs";
+import { fetchBugs, printBugLine, computeColumnWidths } from "./bugzilla.mjs";
+
+const TRIAGE_FIELDS =
+  "id,summary,status,assigned_to,assigned_to_detail,priority,severity,type,depends_on,groups,creator,creation_time,last_change_time";
 
 /** @typedef {import("./types.d.ts").Bug} Bug */
 /** @typedef {import("./types.d.ts").BugzillaAuth} BugzillaAuth */
@@ -31,6 +34,51 @@ const SEVERITY_OPTIONS = [
 const SEVERITY_DEFAULT = 2; // S3
 
 /**
+ * Fetch the open bugs that need triage for a component.
+ * @param {ComponentConfig} config
+ * @param {string | undefined} apiKey
+ * @returns {Promise<Bug[]>}
+ */
+async function fetchTriageBugs(config, apiKey) {
+  const { product, component, url } = config;
+  const params = new URLSearchParams({
+    product,
+    component,
+    resolution: "---",
+    include_fields: TRIAGE_FIELDS,
+  });
+  const bugs = await fetchBugs(new URL(`/rest/bug?${params}`, url), url, apiKey);
+  return bugs.filter(needsTriage);
+}
+
+/**
+ * Non-interactive triage: list the open bugs that still need a priority or
+ * severity, grouped by component, without prompting.
+ * @param {ComponentConfig[]} components
+ * @param {(url: string) => BugzillaAuth | null} getAuth
+ */
+export async function listTriage(components, getAuth) {
+  for (const config of components) {
+    const { product, component, url } = config;
+    const auth = getAuth(url);
+    const toTriage = await fetchTriageBugs(config, auth?.apiKey);
+
+    if (toTriage.length === 0) {
+      console.log(color.blackBright(`\n${product} :: ${component} — no bugs need triage.`));
+      continue;
+    }
+
+    const count = toTriage.length;
+    console.log(`\n  ${color.bgCyan.black(` ${product} :: ${component} `)}  ${color.blackBright(`${count} bug${count !== 1 ? "s" : ""} need triage`)}`);
+    console.log("");
+    const widths = computeColumnWidths(toTriage);
+    for (const bug of toTriage) {
+      printBugLine(bug, url, "", widths);
+    }
+  }
+}
+
+/**
  * @param {ComponentConfig[]} components
  * @param {(url: string) => BugzillaAuth | null} getAuth
  * @param {{ dryRun?: boolean }} [options]
@@ -57,15 +105,7 @@ async function triageComponent(config, auth, dryRun) {
     console.warn(color.yellow(`\nNo API key for ${url} — updates will be skipped.`));
   }
 
-  const params = new URLSearchParams({
-    product,
-    component,
-    resolution: "---",
-    include_fields: "id,summary,status,assigned_to,priority,severity,type,depends_on,creator,creation_time",
-  });
-  const bugs = await fetchBugs(new URL(`/rest/bug?${params}`, url), url, auth?.apiKey);
-
-  const toTriage = bugs.filter(needsTriage);
+  const toTriage = await fetchTriageBugs(config, auth?.apiKey);
 
   if (toTriage.length === 0) {
     console.log(color.blackBright(`\n${product} :: ${component} — no bugs need triage.`));
@@ -270,9 +310,7 @@ function selectFromList(prompt, options, defaultIndex) {
  * @returns {Promise<Bug | null>}
  */
 async function fetchOneBug(bugId, url, apiKey) {
-  const params = new URLSearchParams({
-    include_fields: "id,summary,status,assigned_to,priority,severity,type,depends_on,creator,creation_time",
-  });
+  const params = new URLSearchParams({ include_fields: TRIAGE_FIELDS });
   params.append("id", String(bugId));
   const bugs = await fetchBugs(new URL(`/rest/bug?${params}`, url), url, apiKey ?? undefined);
   return bugs[0] ?? null;

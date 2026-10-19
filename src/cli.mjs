@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import color from "cli-color";
 import { runComponentBugs, fuzzyMatch } from "./bugzilla.mjs";
 import { closestMatch, levenshtein } from "./utils.mjs";
-import { runTriage } from "./triage.mjs";
+import { runTriage, listTriage } from "./triage.mjs";
 import {
   addComponentConfig,
   removeComponentConfig,
@@ -101,14 +101,22 @@ export async function main(argv = process.argv) {
           break;
         }
         const dryRun = args.includes("--dryrun");
+        const interactive =
+          args.includes("--interactive") || args.includes("-i");
         const components = getComponentConfigs();
         if (components.length === 0) {
           console.log("No components saved.");
           console.log("Add one with: moz-bugs component <product> <component>");
           break;
         }
+        if (!interactive) {
+          await listTriage(components, getBugzillaAuth);
+          break;
+        }
         if (!process.stdin.isTTY) {
-          console.error("triage requires an interactive terminal.");
+          console.error(
+            "triage --interactive requires an interactive terminal.",
+          );
           process.exit(1);
         }
         await runTriage(components, getBugzillaAuth, { dryRun });
@@ -508,7 +516,7 @@ Commands:
   list            List open bugs for all saved components
   file            Open a browser to file a new bug
   component       Save or remove a Bugzilla product/component to track
-  triage          Interactively assign priority/severity to un-triaged bugs
+  triage          List un-triaged bugs (add --interactive to assign priority/severity)
 
 Options:
   -h, --help      Show help
@@ -588,19 +596,15 @@ Options:
 function printTriageHelp() {
   console.log(
     `
-Usage: moz-bugs triage
+Usage: moz-bugs triage [options]
 
-Walk through open bugs across all saved components and assign priority
-and severity to any that are missing them.
-
-  Priority is prompted when the bug has no priority set (--).
-  Severity is prompted for defects with no severity set (--).
-  Bugs that are already fully triaged are skipped silently.
-  Requires an API key to write updates back to Bugzilla.
+List open bugs across all saved components that still need a priority or
+severity. Pass --interactive to walk through them and assign values.
 
 Options:
-  --dryrun        Prompt as normal but do not write any changes to Bugzilla
-  -h, --help      Show this help
+  -i, --interactive   Step through bugs and assign priority/severity
+  --dryrun            With --interactive, prompt but do not write changes
+  -h, --help          Show this help
 `.trim(),
   );
 }

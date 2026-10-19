@@ -55,9 +55,9 @@ Save one or more components first, then run `moz-bugs list` to see open bugs acr
 - Open a browser tab to file a new bug  
   `moz-bugs file`  
   `moz-bugs file --component <query>`
-- Interactively assign priority/severity to untriaged bugs  
+- List untriaged bugs, or step through them to assign priority/severity  
   `moz-bugs triage`  
-  `moz-bugs triage --dryrun`
+  `moz-bugs triage --interactive`  
 
 ### list
 
@@ -106,13 +106,17 @@ moz-bugs file -c "Core :: Machine Learning: On Device"
 
 ### triage
 
-Walks through open bugs across all saved components and prompts to assign priority and severity to any that are unset. Requires a Bugzilla API key with write access.
+List open bugs that need triage across all saved components and prompts to assign priority and severity to any that are unset. For the interactive mode, requires a Bugzilla API key with write access.
 
 ```sh
+# List bugs that need triage
 moz-bugs triage
 
+# Step through them and assign priority/severity
+moz-bugs triage --interactive
+
 # Prompt as normal but do not write any changes to Bugzilla
-moz-bugs triage --dryrun
+moz-bugs triage --interactive --dryrun
 ```
 
 ## Development

@@ -314,7 +314,7 @@ function formatDaysAgo(days) {
  * @param {Bug[]} bugs
  * @returns {{ assigneeWidth: number, daysWidth: number }}
  */
-function computeColumnWidths(bugs) {
+export function computeColumnWidths(bugs) {
   let assigneeWidth = 0;
   let daysWidth = 0;
   for (const bug of bugs) {
